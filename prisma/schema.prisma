@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Department {
+  id     Int     @id @default(autoincrement())
+  nombre String  @unique
+
+  users User[]
+}
+
+model OperatingSystem {
+  id     Int     @id @default(autoincrement())
+  nombre String  @unique
+
+  devices Device[]
+}
+
+model DeviceType {
+  id     Int     @id @default(autoincrement())
+  nombre String  @unique
+
+  devices Device[]
+}
+
+model DeviceStatus {
+  id     Int     @id @default(autoincrement())
+  nombre String  @unique
+
+  devices Device[]
+}
+
+model User {
+  id             Int          @id @default(autoincrement())
+  nombre         String
+  correo         String       @unique
+  departamento   Department?  @relation(fields: [departamentoId], references: [id])
+  departamentoId Int?
+  ip_equipo      String?
+  usuario_login  String?
+  password_login String?
+  created_at     DateTime     @default(now())
+
+  devices Device[]
+}
+
+model Device {
+  id                   Int      @id @default(autoincrement())
+  etiqueta             String   @unique
+  nombre_equipo        String?
+  descripcion          String?
+  usuario              User?    @relation(fields: [usuarioId], references: [id])
+  usuarioId            Int?
+
+  tipoId               Int?
+  tipo                 DeviceType?   @relation(fields: [tipoId], references: [id])
+
+  marca                String?
+  modelo               String?
+  numero_serie         String   @unique
+
+  estadoId             Int?
+  estado               DeviceStatus? @relation(fields: [estadoId], references: [id])
+
+  sistemaOperativoId   Int?
+  sistema_operativo    OperatingSystem? @relation(fields: [sistemaOperativoId], references: [id])
+
+  licencia_so          String?
+  office_version       String?
+  office_tipo_licencia String?
+  office_serial        String?
+  office_key           String?
+  garantia_numero_producto String?
+  garantia_inicio      DateTime?
+  garantia_fin         DateTime?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  maintenances Maintenance[]
+  disposals    Disposal[]
+}
+
+model Maintenance {
+  id                Int      @id @default(autoincrement())
+  descripcion       String?
+  fecha_programada  DateTime?
+  fecha_realizacion DateTime?
+  estado            String   @default("pendiente")
+  proveedor         String?
+  device            Device   @relation(fields: [deviceId], references: [id])
+  deviceId          Int
+}
+
+model Disposal {
+  id            Int      @id @default(autoincrement())
+  area          String   @default("SISTEMAS")
+  motivo        String
+  observaciones String?
+  fecha_baja    DateTime?
+  device        Device   @relation(fields: [deviceId], references: [id])
+  deviceId      Int
+}

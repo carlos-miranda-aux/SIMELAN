@@ -1,21 +1,18 @@
-import express from "express";
-import prisma from "../PrismaClient.js";
+import { Router } from "express";
+import {
+  getDevices,
+  getDevice,
+  createDevice,
+  updateDevice,
+  deleteDevice,
+} from "../controllers/device.controller.js";
 
-const router = express.Router();
+const router = Router();
 
-// GET /devices -> lista todos los equipos
-router.get("/", async (req, res) => {
-  try {
-    const devices = await prisma.device.findMany({
-      include: {
-        usuario: true, // Esto funciona porque en el modelo Device tienes `usuario User?`
-      },
-    });
-    res.json(devices);
-  } catch (error) {
-    console.error("❌ Error en /devices:", error); // 👈 imprime el error real
-    res.status(500).json({ error: "Error al obtener los dispositivos" });
-  }
-});
+router.get("/get", getDevices);
+router.get("/get/:id", getDevice);
+router.post("/post", createDevice);
+router.put("/put/:id", updateDevice);
+router.delete("/delete/:id", deleteDevice);
 
 export default router;

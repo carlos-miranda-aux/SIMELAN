@@ -9,6 +9,12 @@ Instala lo siguiente en tu máquina:
 - [Node.js](https://nodejs.org/) (v18 o superior recomendado)
 - [npm](https://www.npmjs.com/) (se instala junto con Node.js)
 - [MySQL](https://dev.mysql.com/downloads/) (asegúrate de que esté corriendo el servicio)
+- ReactJS
+** 
+En VS Code:
+    - Thunder Client: para hacer pruebas de CRUD con el api rest
+    - Snipets para js y react
+    - Material Icon
 
 ## ⚙️ Instalación y configuración
 
@@ -19,7 +25,7 @@ git clone <URL_DEL_REPO>
 cd backend-simelan
 ```
 
-2. Instala dependencias:
+2. Instalar dependencias:
 
 ```bash
 npm install

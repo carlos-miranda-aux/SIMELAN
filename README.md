@@ -16,6 +16,8 @@ Instala lo siguiente en tu máquina:
 - Snippets para JS y React.
 - Material Icon.
 - ExcelJS.
+- Jsonwebtoken
+- Bcryptjs
 
 ---
 

@@ -96,7 +96,8 @@ Estas son las principales librerías y frameworks usados en el backend de SIMELA
 - dotenv → Manejo de variables de entorno (.env).
 
 **Base de datos**
-- @prisma/client → Cliente de Prisma para interactuar con la base de datos.-  - prisma → ORM para modelar y manejar migraciones de la DB.
+- @prisma/client → Cliente de Prisma para interactuar con la base de datos.
+- prisma → ORM para modelar y manejar migraciones de la DB.
 - mysql2 → Conector de Node.js para MySQL (usado por Prisma).
 
 **Autenticación y seguridad**

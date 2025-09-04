@@ -8,6 +8,7 @@ import {
   deleteDisposal,
   exportDisposalsExcel
 } from "../controllers/disposal.controller.js";
+import {verifyRole, verifyToken} from "../middlewares/auth.middleware.js"
 
 const router = Router();
 

@@ -6,6 +6,7 @@ import {
   updateDepartment,
   deleteDepartment
 } from "../controllers/department.controller.js";
+import {verifyRole, verifyToken} from "../middlewares/auth.middleware.js"
 
 const router = Router();
 

@@ -6,7 +6,7 @@ import {
   updateUser,
   deleteUser,
 } from "../controllers/user.controller.js";
-
+import {verifyRole, verifyToken} from "../middlewares/auth.middleware.js"
 const router = Router();
 
 router.get("/get", verifyToken, verifyRole(["ADMIN", "EDITOR", "USER"]), getUsers);

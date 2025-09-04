@@ -1,6 +1,7 @@
 // controllers/disposal.controller.js
 import * as disposalService from "../services/disposal.service.js";
 import ExcelJS from "exceljs";
+import { logAction } from "../services/audit.service.js";
 
 export const getDisposals = async (req, res) => {
   try {
@@ -22,8 +23,12 @@ export const getDisposal = async (req, res) => {
 };
 
 export const createDisposal = async (req, res) => {
+  const userId = req.user.id
   try {
     const disposal = await disposalService.createDisposal(req.body);
+
+    await logAction(userId, "CREATE", "Disposal", disposal.id, null, disposal);
+
     res.status(201).json(disposal);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -31,11 +36,18 @@ export const createDisposal = async (req, res) => {
 };
 
 export const updateDisposal = async (req, res) => {
+  const userId = req.user.id;
   try {
+    const oldDept = await disposalService.getDisposal(req.params.id);
+    if (!oldDept) return res.status(404).json({ message: "Disposal not found" });
+      
     const disposal = await disposalService.updateDisposal(
       req.params.id,
       req.body
     );
+
+    await logAction(userId, "UPDATE", "Department", req.params.id, oldDept, department);
+
     res.json(disposal);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -43,8 +55,15 @@ export const updateDisposal = async (req, res) => {
 };
 
 export const deleteDisposal = async (req, res) => {
+  const userId = req.user.id;
   try {
+    const oldDisp = await departmentService.getDisposal(req.params.id);
+    if (!oldDisp) return res.status(404).json({ message: "Disposal not found" });
+
     await disposalService.deleteDisposal(req.params.id);
+
+    await logAction(userId, "DELETE", "Disposal", req.params.id, oldDisp, null);
+
     res.json({ message: "Baja eliminada correctamente" });
   } catch (error) {
     res.status(500).json({ error: error.message });

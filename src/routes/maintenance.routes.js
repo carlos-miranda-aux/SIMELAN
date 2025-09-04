@@ -6,6 +6,7 @@ import {
   updateMaintenance,
   deleteMaintenance,
 } from "../controllers/maintenance.controller.js";
+import {verifyRole, verifyToken} from "../middlewares/auth.middleware.js"
 
 const router = Router();
 

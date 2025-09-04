@@ -6,6 +6,7 @@ import {
   updateDeviceType,
   deleteDeviceType,
 } from "../controllers/deviceType.controller.js";
+import {verifyRole, verifyToken} from "../middlewares/auth.middleware.js"
 
 const router = Router();
 

@@ -41,9 +41,9 @@ env
 DATABASE_URL="mysql://usuario:password@localhost:3306/simelan"
 JWT_SECRET="supersecreto"
 ```
-🔹 Cambia usuario, password y 3306 según tu instalación de MySQL.
-🔹 simelan es el nombre de la base de datos (si no existe, Prisma la crea con la migración).
-🔹 JWT_SECRET debe ser una clave segura (puedes cambiar "supersecreto" por otra más robusta).
+- Cambia usuario, password y 3306 según tu instalación de MySQL.
+- simelan es el nombre de la base de datos (si no existe, Prisma la crea con la migración).
+- JWT_SECRET debe ser una clave segura (puedes cambiar "supersecreto" por otra más robusta).
 
 Ejecuta la primera migración para crear las tablas:
 

@@ -24,7 +24,7 @@ export const getDepartment = async (req, res) => {
 
 // 📌 Crear un nuevo departamento
 export const createDepartment = async (req, res) => {
-  const userId = req.user.id; // Usuario que hace la acción
+  const userId = req.user?.id || null;// Usuario que hace la acción
   try {
     const department = await departmentService.createDepartment(req.body);
 
@@ -39,7 +39,7 @@ export const createDepartment = async (req, res) => {
 
 // 📌 Actualizar un departamento
 export const updateDepartment = async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user?.id || null;
   try {
     const oldDept = await departmentService.getDepartmentById(req.params.id);
     if (!oldDept) return res.status(404).json({ message: "Department not found" });
@@ -57,7 +57,7 @@ export const updateDepartment = async (req, res) => {
 
 // 📌 Eliminar un departamento
 export const deleteDepartment = async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user?.id || null;
   try {
     const oldDept = await departmentService.getDepartmentById(req.params.id);
     if (!oldDept) return res.status(404).json({ message: "Department not found" });

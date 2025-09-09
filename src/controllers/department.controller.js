@@ -39,7 +39,7 @@ export const createDepartment = async (req, res) => {
 
 // 📌 Actualizar un departamento
 export const updateDepartment = async (req, res) => {
-  const userId = req.user?.id || null;
+  const userId = req.user?.id || null; //Devuelve "null" si no encuentra el ID de usuario
   try {
     const oldDept = await departmentService.getDepartmentById(req.params.id);
     if (!oldDept) return res.status(404).json({ message: "Department not found" });

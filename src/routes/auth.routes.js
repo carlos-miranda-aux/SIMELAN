@@ -9,8 +9,8 @@ router.post("/register", register);
 router.post("/login", login);
 
 // Rutas protegidas solo con token
-router.get("/users", verifyToken, verifyRole(["EDITOR", "ADMIN"]), getUsers);
-router.delete("/users/:id", verifyToken, verifyRole(["ADMIN"]), deleteUser);
-router.put("/users/:id/password", verifyToken, verifyRole(["USER", "EDITOR", "ADMIN"]), updatePassword);
+router.get("/get", verifyToken, verifyRole(["EDITOR", "ADMIN"]), getUsers);
+router.delete("/delete/:id", verifyToken, verifyRole(["ADMIN"]), deleteUser);
+router.put("/put/:id/password", verifyToken, verifyRole(["USER", "EDITOR", "ADMIN"]), updatePassword);
 
 export default router;

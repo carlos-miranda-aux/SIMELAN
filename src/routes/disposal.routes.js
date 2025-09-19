@@ -16,7 +16,7 @@ router.get("/get", verifyToken, verifyRole(["ADMIN", "EDITOR", "USER"]), getDisp
 router.get("/get/:id", verifyToken, verifyRole(["ADMIN", "EDITOR", "USER"]), getDisposal);
 router.post("/post", verifyToken, verifyRole(["ADMIN", "EDITOR"]), createDisposal);
 router.put("/put/:id", verifyToken, verifyRole(["ADMIN", "EDITOR"]),updateDisposal);
-router.delete("/delete/:id", verifyToken, verifyRole(["ADMIN", "EDITOR"]), deleteDisposal);
+router.delete("/delete/:id", verifyToken, verifyRole(["ADMIN"]), deleteDisposal);
 
 // Exportar a Excel
 router.get("/export/excel", exportDisposalsExcel);

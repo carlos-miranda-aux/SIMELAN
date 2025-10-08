@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import prisma from "./PrismaClient.js";
-
+import bcrypt from "bcryptjs";
 
 // Importar rutas
 import departmentRoutes from "./routes/department.routes.js";
@@ -14,7 +14,7 @@ import devicesRoutes from "./routes/devices.routes.js";
 import maintenanceRoutes from "./routes/maintenance.routes.js";
 import disposalRoutes from "./routes/disposal.routes.js";
 import authRoutes from "./routes/auth.routes.js";
-import auditRoutes from "./routes/audit.routes.js"
+import auditRoutes from "./routes/audit.routes.js";
 
 dotenv.config();
 
@@ -32,15 +32,38 @@ app.use("/api/devices", devicesRoutes);
 app.use("/api/maintenances", maintenanceRoutes);
 app.use("/api/disposals", disposalRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/audit",auditRoutes)
-
+app.use("/api/audit", auditRoutes);
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
-});
 
-prisma.$connect()
-  .then(() => console.log("Conectado a la BD"))
-  .catch(err => console.log("Error en la conexion"))
+  try {
+    await prisma.$connect();
+    console.log("Conectado a la BD");
+
+    // 🔹 Crear superusuario por defecto si no existe
+    const superAdmin = await prisma.userSistema.findFirst({
+      where: { username: "superadmin", rol: "ADMIN" }
+    });
+
+    if (!superAdmin) {
+      const hashedPassword = await bcrypt.hash("superadmin123", 10); // contraseña inicial
+      const user = await prisma.userSistema.create({
+        data: {
+          username: "superadmin",
+          email: "superadmin@crownparadise.com",
+          password: hashedPassword,
+          nombre: "Super Administrador",
+          rol: "ADMIN",
+        },
+      });
+      console.log("Superusuario creado:", user.username);
+    } else {
+      console.log("Superusuario ya existe:", superAdmin.username);
+    }
+  } catch (err) {
+    console.error("Error al conectar a la DB o crear superusuario:", err);
+  }
+});

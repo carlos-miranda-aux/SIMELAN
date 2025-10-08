@@ -12,7 +12,7 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
-    const data = await loginUser({ identifier, password });
+    const data = await authService.loginUser({ identifier, password });
     res.json(data);
   } catch (err) {
     res.status(400).json({ message: err.message });

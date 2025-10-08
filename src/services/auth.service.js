@@ -19,13 +19,16 @@ export const registerUser = async (data) => {
   });
 };
 
-// 🔹 Login
-export const loginUser = async ({ username, password }) => {
-  const user = await prisma.userSistema.findUnique({
-    where: { OR: [
+// 🔹 Login (acepta username o email)
+export const loginUser = async ({ identifier, password }) => {
+  // Buscar usuario por username o email
+  const user = await prisma.userSistema.findFirst({
+    where: {
+      OR: [
         { username: identifier },
         { email: identifier },
-      ], },
+      ],
+    },
   });
 
   if (!user) throw new Error("Usuario no encontrado");
@@ -39,13 +42,20 @@ export const loginUser = async ({ username, password }) => {
     { expiresIn: "60d" }
   );
 
+  // 🔹 Devuelve toda la info necesaria para el frontend y contexto
   return { 
     token, 
-    user: { id: user.id, username: user.username, rol: user.rol } 
+    user: { 
+      id: user.id,
+      username: user.username,
+      rol: user.rol,
+      nombre: user.nombre,
+      email: user.email
+    } 
   };
 };
 
-// 🔹 Obtener todos los usuarios (solo info básica, sin contraseñas)
+// 🔹 Obtener todos los usuarios
 export const getUsers = () => {
   return prisma.userSistema.findMany({
     select: {
@@ -72,5 +82,16 @@ export const updatePassword = async (id, newPassword) => {
   return prisma.userSistema.update({
     where: { id: Number(id) },
     data: { password: hashedPassword },
+  });
+};
+
+// 🔹 Actualizar usuario (nombre o email)
+export const updateUser = async (id, data) => {
+  return prisma.userSistema.update({
+    where: { id: Number(id) },
+    data: {
+      nombre: data.nombre,
+      email: data.email,
+    },
   });
 };

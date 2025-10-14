@@ -1,8 +1,6 @@
 import * as departmentService from "../services/department.service.js";
-import { logAction } from "../services/audit.service.js";
-import prisma from "../PrismaClient.js"; // 👈 Nueva importación
+import prisma from "../PrismaClient.js";
 
-// 📌 Obtener todos los departamentos
 export const getDepartments = async (req, res) => {
   try {
     const departments = await departmentService.getDepartments();
@@ -12,7 +10,6 @@ export const getDepartments = async (req, res) => {
   }
 };
 
-// 📌 Obtener un departamento por ID
 export const getDepartment = async (req, res) => {
   try {
     const department = await departmentService.getDepartmentById(req.params.id);
@@ -23,51 +20,31 @@ export const getDepartment = async (req, res) => {
   }
 };
 
-// 📌 Crear un nuevo departamento
 export const createDepartment = async (req, res) => {
-  const userId = req.user?.id || null;
   try {
     const department = await departmentService.createDepartment(req.body);
-
-    // AUDITORÍA
-    //await logAction(userId, "CREATE", "Department", department.id, null, { ...department });
-
     res.status(201).json(department);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// 📌 Actualizar un departamento
 export const updateDepartment = async (req, res) => {
-  const userId = req.user?.id || null;
   try {
     const oldDept = await departmentService.getDepartmentById(req.params.id);
     if (!oldDept) return res.status(404).json({ message: "Department not found" });
-
     const department = await departmentService.updateDepartment(req.params.id, req.body);
-
-    // AUDITORÍA
-    //await logAction(userId, "UPDATE", "Department", req.params.id, { ...oldDept }, { ...department }); // 👈 Copia simple
-
     res.json(department);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// 📌 Eliminar un departamento
 export const deleteDepartment = async (req, res) => {
-  const userId = req.user?.id || null;
   try {
     const oldDept = await departmentService.getDepartmentById(req.params.id);
     if (!oldDept) return res.status(404).json({ message: "Department not found" });
-
     await departmentService.deleteDepartment(req.params.id);
-
-    // AUDITORÍA
-    //await logAction(userId, "DELETE", "Department", req.params.id, { ...oldDept }, null); // 👈 Copia simple
-
     res.json({ message: "Department deleted" });
   } catch (error) {
     res.status(500).json({ error: error.message });

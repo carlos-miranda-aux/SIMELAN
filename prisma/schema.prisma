@@ -59,25 +59,20 @@ model Device {
   etiqueta             String   @unique
   nombre_equipo        String?
   descripcion          String?
-  ip_equipo            String? // 👈 Campo movido aquí
+  ip_equipo            String?
   usuario              User?    @relation(fields: [usuarioId], references: [id])
   usuarioId            Int?
   departamento         Department? @relation(fields: [departamentoId], references: [id])
   departamentoId       Int?
-
   tipoId               Int?
   tipo                 DeviceType? @relation(fields: [tipoId], references: [id])
-
   marca                String?
   modelo               String?
   numero_serie         String   @unique
-
   estadoId             Int?
   estado               DeviceStatus? @relation(fields: [estadoId], references: [id])
-
   sistemaOperativoId   Int?
   sistema_operativo    OperatingSystem? @relation(fields: [sistemaOperativoId], references: [id])
-
   licencia_so          String?
   office_version       String?
   office_tipo_licencia String?
@@ -88,9 +83,10 @@ model Device {
   garantia_fin         DateTime?
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
+  fecha_baja           DateTime?
 
   maintenances Maintenance[]
-  disposals    Disposal[]
+  // disposals    Disposal[] 👈 Elimina esta línea
 
   @@index([usuarioId])
   @@index([departamentoId])
@@ -112,18 +108,6 @@ model Maintenance {
   @@index([deviceId])
 }
 
-model Disposal {
-  id            Int      @id @default(autoincrement())
-  area          String   @default("SISTEMAS")
-  motivo        String
-  observaciones String?
-  fecha_baja    DateTime?
-  device        Device   @relation(fields: [deviceId], references: [id])
-  deviceId      Int
-
-  @@index([deviceId])
-}
-
 enum Rol {
   ADMIN
   USER
@@ -139,21 +123,4 @@ model userSistema {
   rol       Rol      @default(USER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-model AuditLog {
-  id         Int         @id @default(autoincrement())
-  userId     Int?
-  action     String
-  resource   String
-  resourceId Int?
-  oldData    String?
-  newData    String?
-  createdAt  DateTime    @default(now())
-
-  user userSistema? @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-  @@index([resource])
-  @@index([createdAt])
 }

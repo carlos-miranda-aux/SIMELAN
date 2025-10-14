@@ -22,25 +22,14 @@ export const getDeviceById = (id) =>
     },
   });
 
-export const createDevice = (data) => prisma.device.create({ data });
-
-export const updateDevice = (id, data) =>
-  prisma.device.update({
-    where: { id: Number(id) },
-    data,
-  });
-
-export const deleteDevice = (id) =>
-  prisma.device.delete({
-    where: { id: Number(id) },
-  });
-
-/* 🔹 Nuevo: obtener solo dispositivos inactivos/bajas */
-export const getInactiveDevices = () =>
+// 📌 Nuevo: obtener solo dispositivos activos
+export const getActiveDevices = () => 
   prisma.device.findMany({
     where: {
       estado: {
-        nombre: "Inactivo",
+        NOT: {
+          nombre: "Baja", // Filtra los que no tienen el estado "Baja"
+        },
       },
     },
     include: {
@@ -48,6 +37,35 @@ export const getInactiveDevices = () =>
       tipo: true,
       estado: true,
       sistema_operativo: true,
-      disposals: true,
     },
+  });
+
+
+export const createDevice = (data) => prisma.device.create({ data });
+
+export const deleteDevice = (id) =>
+  prisma.device.delete({
+    where: { id: Number(id) },
+  });
+
+export const getInactiveDevices = () =>
+  prisma.device.findMany({
+    where: {
+      estado: {
+        nombre: "Baja",
+      },
+    },
+    include: {
+      usuario: true,
+      tipo: true,
+      estado: true,
+      sistema_operativo: true,
+    },
+  });
+
+// Actualizar la función para incluir la fecha de baja
+export const updateDevice = (id, data) =>
+  prisma.device.update({
+    where: { id: Number(id) },
+    data,
   });

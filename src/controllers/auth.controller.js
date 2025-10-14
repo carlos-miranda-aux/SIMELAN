@@ -1,6 +1,5 @@
 import * as authService from "../services/auth.service.js";
 import prisma from "../PrismaClient.js";
-import { logAction } from "../services/audit.service.js";
 
 // 📌 Login de usuarios
 export const login = async (req, res) => {
@@ -29,18 +28,12 @@ export const deleteUser = async (req, res) => {
     const userToDelete = await prisma.userSistema.findUnique({
       where: { id: Number(req.params.id) },
     });
-
     if (!userToDelete) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-
     if (userToDelete.username === "superadmin") {
       return res.status(403).json({ error: "No se puede eliminar al superadministrador" });
     }
-
-    // AUDITORÍA
-    //await logAction(req.user.id, "DELETE", "userSistema", req.params.id, { ...userToDelete }, null);
-
     await authService.deleteUser(req.params.id);
     res.json({ message: "Usuario eliminado correctamente" });
   } catch (error) {
@@ -55,32 +48,20 @@ export const updateUserController = async (req, res) => {
     const oldUser = await prisma.userSistema.findUnique({
       where: { id: Number(userId) },
     });
-
     if (!oldUser) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-
     const updatedUser = await authService.updateUser(userId, req.body);
-
-    // AUDITORÍA
-    //await logAction(req.user.id, "UPDATE", "userSistema", userId, { ...oldUser }, { ...updatedUser });
-
     res.json({ message: "Usuario actualizado correctamente", user: updatedUser });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-
 // 📌 Crear usuario (para uso de administradores)
 export const createUser = async (req, res) => {
-  const userId = req.user.id;
   try {
     const user = await authService.registerUser(req.body);
-
-    // AUDITORÍA
-    //await logAction(userId, "CREATE", "userSistema", user.id, null, { ...user });
-
     res.status(201).json(user);
   } catch (error) {
     res.status(400).json({ error: error.message });

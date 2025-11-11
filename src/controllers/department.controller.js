@@ -1,5 +1,4 @@
 import * as departmentService from "../services/department.service.js";
-import prisma from "../PrismaClient.js";
 
 export const getDepartments = async (req, res) => {
   try {

@@ -46,7 +46,6 @@ model User {
   departamento   Department?  @relation(fields: [departamentoId], references: [id])
   departamentoId Int?
   usuario_login  String?
-  password_login String?
   created_at     DateTime     @default(now())
 
   devices Device[]
@@ -101,7 +100,6 @@ model Maintenance {
   fecha_programada  DateTime?
   fecha_realizacion DateTime?
   estado            String   @default("pendiente")
-  proveedor         String?
   device            Device   @relation(fields: [deviceId], references: [id])
   deviceId          Int
 

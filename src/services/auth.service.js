@@ -69,6 +69,19 @@ export const getUsers = () => {
   });
 };
 
+export const getUserById = (id) => {
+  return prisma.userSistema.findUnique({
+    where: { id: Number(id) },
+    select: {
+      id: true,
+      username: true,
+      nombre: true,
+      rol: true,
+      email: true,
+    },
+  });
+};
+
 // 🔹 Eliminar usuario
 export const deleteUser = (id) => {
   return prisma.userSistema.delete({

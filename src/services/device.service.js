@@ -37,6 +37,7 @@ export const getActiveDevices = () =>
       tipo: true,
       estado: true,
       sistema_operativo: true,
+      maintenances:true
     },
   });
 

@@ -5,10 +5,20 @@ export const getMaintenances = () =>
     include: { device: true },
   });
 
-export const getMaintenanceById = (id) =>
+  export const getMaintenanceById = (id) =>
   prisma.maintenance.findUnique({
     where: { id: Number(id) },
-    include: { device: true },
+    include: {
+      // Incluir el dispositivo...
+      device: {
+        // ...y del dispositivo, incluir sus relaciones
+        include: {
+          usuario: true,
+          departamento: true,
+          tipo: true,
+        },
+      },
+    },
   });
 
 export const createMaintenance = (data) =>
@@ -24,3 +34,5 @@ export const deleteMaintenance = (id) =>
   prisma.maintenance.delete({
     where: { id: Number(id) },
   });
+
+  

@@ -93,3 +93,107 @@ export const exportMaintenances = async (req, res) => {
     res.status(500).json({ error: "Error al exportar mantenimientos" });
   }
 };
+
+export const exportIndividualMaintenance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const maintenance = await maintenanceService.getMaintenanceById(id);
+
+    if (!maintenance) {
+      return res.status(404).json({ error: "Mantenimiento no encontrado" });
+    }
+
+    const device = maintenance.device;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Formato de Servicio");
+
+    // --- Estilo de Formato ---
+    worksheet.mergeCells('A1:D1');
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = `Formato de Servicio - Manto #${maintenance.id}`;
+    titleCell.font = { size: 16, bold: true };
+    titleCell.alignment = { horizontal: 'center' };
+    
+    // Ancho de columnas
+    worksheet.getColumn('A').width = 20;
+    worksheet.getColumn('B').width = 30;
+    worksheet.getColumn('C').width = 20;
+    worksheet.getColumn('D').width = 30;
+
+    // --- Sección de Dispositivo ---
+    worksheet.mergeCells('A3:D3');
+    const deviceTitle = worksheet.getCell('A3');
+    deviceTitle.value = "Detalles del Equipo";
+    deviceTitle.font = { bold: true };
+    deviceTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} }; // Fondo gris
+
+    worksheet.getCell('A4').value = "Etiqueta";
+    worksheet.getCell('B4').value = device.etiqueta;
+    worksheet.getCell('C4').value = "N° Serie";
+    worksheet.getCell('D4').value = device.numero_serie;
+
+    worksheet.getCell('A5').value = "Tipo";
+    worksheet.getCell('B5').value = device.tipo?.nombre || "N/A";
+    worksheet.getCell('C5').value = "Marca / Modelo";
+    worksheet.getCell('D5').value = `${device.marca || ''} / ${device.modelo || ''}`;
+
+    // --- Sección de Usuario ---
+    worksheet.mergeCells('A7:D7');
+    const userTitle = worksheet.getCell('A7');
+    userTitle.value = "Asignación";
+    userTitle.font = { bold: true };
+    userTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
+
+    worksheet.getCell('A8').value = "Usuario Asignado";
+    worksheet.getCell('B8').value = device.usuario?.nombre || "No asignado";
+    worksheet.getCell('C8').value = "Departamento";
+    worksheet.getCell('D8').value = device.departamento?.nombre || "N/A";
+
+    // --- Sección de Mantenimiento ---
+    worksheet.mergeCells('A10:D10');
+    const mantoTitle = worksheet.getCell('A10');
+    mantoTitle.value = "Detalles del Servicio";
+    mantoTitle.font = { bold: true };
+    mantoTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
+
+    worksheet.getCell('A11').value = "Estado";
+    worksheet.getCell('B11').value = maintenance.estado;
+    
+    worksheet.getCell('A12').value = "Fecha Programada";
+    worksheet.getCell('B12').value = maintenance.fecha_programada ? new Date(maintenance.fecha_programada).toLocaleDateString() : "N/A";
+    worksheet.getCell('C12').value = "Fecha Realización";
+    worksheet.getCell('D12').value = maintenance.fecha_realizacion ? new Date(maintenance.fecha_realizacion).toLocaleDateString() : "N/A";
+
+    worksheet.mergeCells('A13:B13');
+    worksheet.getCell('A13').value = "Descripción del Servicio:";
+    worksheet.mergeCells('A14:D18'); // Celda grande para la descripción
+    const descCell = worksheet.getCell('A14');
+    descCell.value = maintenance.descripcion;
+    descCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+
+    // --- Firma ---
+    worksheet.getCell('A20').value = "Técnico Realiza:";
+    worksheet.mergeCells('B20:C20');
+    worksheet.getCell('B20').border = { bottom: { style: 'thin' } };
+    
+    worksheet.getCell('A22').value = "Usuario Recibe:";
+    worksheet.mergeCells('B22:C22');
+    worksheet.getCell('B22').border = { bottom: { style: 'thin' } };
+
+    // --- Enviar el archivo ---
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Servicio_Manto_${id}.xlsx`
+    );
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al exportar el formato de servicio" });
+  }
+};

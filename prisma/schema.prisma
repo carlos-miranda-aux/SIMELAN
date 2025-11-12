@@ -84,6 +84,8 @@ model Device {
   updated_at           DateTime @updatedAt
   fecha_baja           DateTime?
 
+  fecha_proxima_revision DateTime?
+
   maintenances Maintenance[]
   // disposals    Disposal[] 👈 Elimina esta línea
 

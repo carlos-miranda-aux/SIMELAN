@@ -5,7 +5,8 @@ import {
   createMaintenance,
   updateMaintenance,
   deleteMaintenance,
-  exportMaintenances
+  exportMaintenances,
+  exportIndividualMaintenance
 } from "../controllers/maintenance.controller.js";
 import {verifyRole, verifyToken} from "../middlewares/auth.middleware.js"
 
@@ -17,5 +18,6 @@ router.post("/post", verifyToken, verifyRole(["ADMIN", "EDITOR"]), createMainten
 router.put("/put/:id", verifyToken, verifyRole(["ADMIN", "EDITOR"]), updateMaintenance);
 router.delete("/delete/:id",  verifyToken, verifyRole(["ADMIN", "EDITOR"]),deleteMaintenance);
 router.get("/export/all", verifyToken, verifyRole(["ADMIN", "EDITOR"]), exportMaintenances);
+router.get("/export/individual/:id", verifyToken, verifyRole(["ADMIN", "EDITOR"]), exportIndividualMaintenance);
 
 export default router;

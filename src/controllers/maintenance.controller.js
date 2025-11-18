@@ -280,8 +280,7 @@ export const exportIndividualMaintenance = async (req, res) => {
     res.end();
 
   } catch (error) {
-    // Añadimos un log más detallado para ti en el servidor
-    console.error("Error detallado al exportar el formato de servicio:", error.message);
+    console.error("Error al exportar el formato de servicio:", error); // ✅ Correcto
     res.status(500).json({ error: "Error al exportar el formato de servicio" });
   }
 };

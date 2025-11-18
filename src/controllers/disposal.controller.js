@@ -1,19 +1,17 @@
-// controllers/disposal.controller.js
+// src/controllers/disposal.controller.js
 import * as deviceService from "../services/device.service.js";
 import ExcelJS from "exceljs";
 
-// ⚠️ ESTA FUNCIÓN ESTÁ MODIFICADA (getDisposals)
 export const getDisposals = async (req, res) => {
   try {
-    // 1. Leer parámetros de paginación
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || ""; // 👈 Capturamos búsqueda
     const skip = (page - 1) * limit;
 
-    // 2. Llamar al servicio de 'device' (que es el correcto)
-    const { devices, totalCount } = await deviceService.getInactiveDevices({ skip, take: limit });
+    // Llamamos al servicio de 'device' actualizado con 'search'
+    const { devices, totalCount } = await deviceService.getInactiveDevices({ skip, take: limit, search });
     
-    // 3. Devolver los datos
     res.json({
       data: devices,
       totalCount: totalCount,
@@ -25,15 +23,10 @@ export const getDisposals = async (req, res) => {
   }
 };
 
-// --- FUNCIONES SIN CAMBIOS ---
-// (getDisposal, updateDisposal, deleteDisposal, exportDisposalsExcel)
-// Nota: 'getDisposal' y 'updateDisposal' aquí se refieren a la tabla 'disposal'
-// que ya no usas. Las dejamos por si acaso, pero la lógica principal
-// ya está en el device.controller.
-
+// ... (Resto de funciones: getDisposal, updateDisposal, deleteDisposal, exportDisposalsExcel SIN CAMBIOS)
 export const getDisposal = async (req, res) => {
   try {
-    const disposal = await deviceService.getDeviceById(req.params.id); // Apuntamos al device
+    const disposal = await deviceService.getDeviceById(req.params.id); 
     if (!disposal) return res.status(404).json({ error: "Baja no encontrada" });
     res.json(disposal);
   } catch (error) {
@@ -41,14 +34,11 @@ export const getDisposal = async (req, res) => {
   }
 };
 
-// Esta función ahora solo debería actualizar las notas de baja.
-// La lógica principal está en device.controller.js
 export const updateDisposal = async (req, res) => {
   try {
     const oldDisposal = await deviceService.getDeviceById(req.params.id);
     if (!oldDisposal) return res.status(404).json({ message: "Disposal not found" });
     
-    // Solo actualiza los campos de baja
     const dataToUpdate = {
       motivo_baja: req.body.motivo_baja,
       observaciones_baja: req.body.observaciones_baja
@@ -63,7 +53,6 @@ export const updateDisposal = async (req, res) => {
 
 export const deleteDisposal = async (req, res) => {
   try {
-    // Esto no debería usarse, ya que no borramos.
     res.status(403).json({ error: "Las bajas no se pueden eliminar, es un registro permanente." });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -97,10 +86,7 @@ export const exportDisposalsExcel = async (req, res) => {
     });
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).alignment = { horizontal: "center" };
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", "attachment; filename=bajas.xlsx");
     await workbook.xlsx.write(res);
     res.end();

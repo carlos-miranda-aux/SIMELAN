@@ -1,13 +1,37 @@
-import prisma from "../PrismaClient.js";
+// src/services/area.service.js
+import prisma from "../../src/PrismaClient.js";
 
-export const getAreas = () => {
+// PAGINATED function for table data
+export const getAreas = async ({ skip, take }) => {
+  const [areas, totalCount] = await prisma.$transaction([
+    prisma.area.findMany({
+      include: {
+        departamento: true, 
+      },
+      skip: skip,
+      take: take,
+      orderBy: [
+        { departamento: { nombre: 'asc' } },
+        { nombre: 'asc' }
+      ]
+    }),
+    prisma.area.count()
+  ]);
+
+  return { areas, totalCount };
+};
+
+
+// FULL LIST function for selectors in forms (no pagination applied)
+export const getAllAreas = () => {
   return prisma.area.findMany({
     include: {
-      departamento: true, // Para ver a qué depto pertenece
+      departamento: true, 
     },
-    orderBy: {
-      departamento: { nombre: 'asc' }
-    }
+    orderBy: [
+        { departamento: { nombre: 'asc' } },
+        { nombre: 'asc' }
+      ]
   });
 };
 

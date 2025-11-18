@@ -2,8 +2,25 @@ import * as departmentService from "../services/department.service.js";
 
 export const getDepartments = async (req, res) => {
   try {
-    const departments = await departmentService.getDepartments();
-    res.json(departments);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Si limit no se pide (o es inválido), se asume que se pide la lista completa para un selector (formularios)
+    if (isNaN(limit) || limit === 0 || req.query.limit === undefined || req.query.limit === '0') {
+        const departments = await departmentService.getAllDepartments();
+        return res.json(departments);
+    }
+    
+    // Paginación para la tabla de AdminSettings
+    const { departments, totalCount } = await departmentService.getDepartments({ skip, take: limit });
+
+    res.json({
+      data: departments,
+      totalCount: totalCount,
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / limit)
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

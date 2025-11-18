@@ -1,7 +1,7 @@
 // src/utils/preloadData.js
 import prisma from "../PrismaClient.js";
 
-/**
+/*
  * Precarga datos maestros (Departamentos, Áreas, Tipos, Estados, SO)
  * si las tablas correspondientes están vacías.
  */
@@ -143,4 +143,4 @@ export const preloadMasterData = async () => {
     }
 
     console.log("Precarga de datos maestros finalizada.");
-};
+}; 

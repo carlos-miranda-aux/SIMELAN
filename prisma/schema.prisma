@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// prisma/schema.prisma
 
 datasource db {
   provider = "mysql"
@@ -10,111 +9,127 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// 1. DEPARTAMENTO (Ej. Contraloría, División Cuartos)
 model Department {
-  id     Int     @id @default(autoincrement())
-  nombre String  @unique
+  id     Int    @id @default(autoincrement())
+  nombre String @unique
 
-  users   User[]
-  devices Device[]
+  areas Area[] // Un departamento tiene muchas áreas
+}
+
+// 2. AREA (NUEVA TABLA: Ej. Sistemas, Recepción, Concierge)
+model Area {
+  id             Int        @id @default(autoincrement())
+  nombre         String
+  departamento   Department @relation(fields: [departamentoId], references: [id])
+  departamentoId Int
+
+  users   User[] // Un área tiene muchos empleados
+  devices Device[] // Un área tiene muchos equipos
+
+  @@unique([nombre, departamentoId]) // No puede haber dos áreas con el mismo nombre en el mismo depto
 }
 
 model OperatingSystem {
-  id     Int     @id @default(autoincrement())
-  nombre String  @unique
-
+  id      Int      @id @default(autoincrement())
+  nombre  String   @unique
   devices Device[]
 }
 
 model DeviceType {
-  id     Int     @id @default(autoincrement())
-  nombre String  @unique
-
+  id      Int      @id @default(autoincrement())
+  nombre  String   @unique
   devices Device[]
 }
 
 model DeviceStatus {
-  id     Int     @id @default(autoincrement())
-  nombre String  @unique
-
+  id      Int      @id @default(autoincrement())
+  nombre  String   @unique
   devices Device[]
 }
 
 model User {
-  id             Int          @id @default(autoincrement())
-  nombre         String
-  correo         String       @unique
-  departamento   Department?  @relation(fields: [departamentoId], references: [id])
-  departamentoId Int?
-  usuario_login  String?
-  created_at     DateTime     @default(now())
-  es_jefe_de_area Boolean   @default(false)
-  devices Device[]
+  id              Int      @id @default(autoincrement())
+  nombre          String
+  correo          String   @unique
+  
+  // Cambio: Ahora se relaciona con AREA, no directo con Departamento
+  area            Area?    @relation(fields: [areaId], references: [id])
+  areaId          Int?
 
-  @@index([departamentoId])
+  usuario_login   String?
+  created_at      DateTime @default(now())
+  
+  // Ahora "Jefe de Área" significa que es responsable de su Area asignada
+  es_jefe_de_area Boolean  @default(false)
+  
+  devices         Device[]
+
+  @@index([areaId])
 }
 
 model Device {
-  id                   Int      @id @default(autoincrement())
-  etiqueta             String?   @unique // 👈 Opcional
-  nombre_equipo        String   // 👈 Obligatorio
-  descripcion          String?
-  ip_equipo            String?
+  id                       Int       @id @default(autoincrement())
+  etiqueta                 String?   
+  nombre_equipo            String 
+  descripcion              String?
+  ip_equipo                String?
   
-  usuario              User?    @relation(fields: [usuarioId], references: [id])
-  usuarioId            Int?
+  usuario                  User?     @relation(fields: [usuarioId], references: [id])
+  usuarioId                Int?
+
+  // Cambio: El equipo pertenece a un AREA
+  area                     Area?     @relation(fields: [areaId], references: [id])
+  areaId                   Int?
+
+  tipo                     DeviceType @relation(fields: [tipoId], references: [id])
+  tipoId                   Int      
   
-  departamento         Department? @relation(fields: [departamentoId], references: [id])
-  departamentoId       Int?
+  marca                    String   
+  modelo                   String   
   
-  tipo                 DeviceType @relation(fields: [tipoId], references: [id])
-  tipoId               Int      // 👈 Obligatorio
+  numero_serie             String    @unique
   
-  marca                String   // 👈 Obligatorio
-  modelo               String   // 👈 Obligatorio
+  estado                   DeviceStatus @relation(fields: [estadoId], references: [id])
+  estadoId                 Int      
   
-  numero_serie         String   @unique
+  sistema_operativo        OperatingSystem? @relation(fields: [sistemaOperativoId], references: [id])
+  sistemaOperativoId       Int?
   
-  estado               DeviceStatus @relation(fields: [estadoId], references: [id])
-  estadoId             Int      // 👈 Obligatorio
-  
-  sistema_operativo    OperatingSystem? @relation(fields: [sistemaOperativoId], references: [id])
-  sistemaOperativoId   Int?
-  
-  licencia_so          String?
-  office_version       String?
-  office_tipo_licencia String?
-  office_serial        String?
-  office_key           String?
+  licencia_so              String?
+  office_version           String?
+  office_tipo_licencia     String?
+  office_serial            String?
+  office_key               String?
   garantia_numero_producto String?
-  garantia_inicio      DateTime?
-  garantia_fin         DateTime?
+  garantia_inicio          DateTime?
+  garantia_fin             DateTime?
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @updatedAt
   
-  created_at           DateTime @default(now())
-  updated_at           DateTime @updatedAt
-  
-  fecha_baja           DateTime?
-  fecha_proxima_revision DateTime?
+  fecha_baja               DateTime?
+  fecha_proxima_revision   DateTime?
+  motivo_baja              String?   @db.VarChar(191)
+  observaciones_baja       String?   @db.Text 
 
- motivo_baja          String?   @db.VarChar(191)  // 👈 Con signo ?
- observaciones_baja   String?   @db.Text          // 👈 Con signo ?
-
-  maintenances Maintenance[]
+  maintenances             Maintenance[]
 
   @@index([usuarioId])
-  @@index([departamentoId])
+  @@index([areaId])
   @@index([tipoId])
   @@index([estadoId])
   @@index([sistemaOperativoId])
 }
 
 model Maintenance {
-  id                Int      @id @default(autoincrement())
-  descripcion       String   // 👈 Obligatorio
-  fecha_programada  DateTime?
-  fecha_realizacion DateTime?
-  estado            String   @default("pendiente")
-  device            Device   @relation(fields: [deviceId], references: [id])
-  deviceId          Int
+  id                  Int       @id @default(autoincrement())
+  descripcion         String   
+  fecha_programada    DateTime?
+  fecha_realizacion   DateTime?
+  estado              String    @default("pendiente")
+  
+  device              Device    @relation(fields: [deviceId], references: [id])
+  deviceId            Int
   
   diagnostico         String?   @db.Text
   acciones_realizadas String?   @db.Text

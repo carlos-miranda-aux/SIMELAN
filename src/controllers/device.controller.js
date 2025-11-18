@@ -52,7 +52,7 @@ export const createDevice = async (req, res) => {
 
     const dataToCreate = {
       ...deviceData,
-      departamentoId: deviceData.departamentoId ? Number(deviceData.departamentoId) : null,
+      areaId: deviceData.areaId ? Number(deviceData.areaId) : null, // 👈 CORRECCIÓN: usar areaId
       usuarioId: deviceData.usuarioId ? Number(deviceData.usuarioId) : null,
       tipoId: deviceData.tipoId ? Number(deviceData.tipoId) : null,
       sistemaOperativoId: deviceData.sistemaOperativoId ? Number(deviceData.sistemaOperativoId) : null,
@@ -84,6 +84,12 @@ export const updateDevice = async (req, res) => {
     if (!oldDevice) return res.status(404).json({ error: "Dispositivo no encontrado" });
     
     const dataToUpdate = { ...req.body };
+    
+    // CORRECCIÓN: Asegurar que el areaId se convierta a número
+    if (dataToUpdate.areaId !== undefined) {
+        dataToUpdate.areaId = dataToUpdate.areaId ? Number(dataToUpdate.areaId) : null;
+    }
+    
     const disposedStatus = await prisma.deviceStatus.findFirst({ where: { nombre: "Baja" } });
     const disposedStatusId = disposedStatus?.id;
     const isAlreadyBaja = oldDevice.estadoId === disposedStatusId;
@@ -136,6 +142,8 @@ export const exportInactiveDevices = async (req, res) => {
       { header: "Tipo", key: "tipo", width: 20 },
       { header: "Marca", key: "marca", width: 20 },
       { header: "Modelo", key: "modelo", width: 20 },
+      { header: "Área", key: "area", width: 25 }, // 👈 CAMBIO: Agregar área
+      { header: "Departamento", key: "departamento", width: 25 }, // 👈 CAMBIO: Agregar departamento
       { header: "Motivo", key: "motivo_baja", width: 30 },
       { header: "Observaciones", key: "observaciones_baja", width: 30 },
     ];
@@ -146,6 +154,8 @@ export const exportInactiveDevices = async (req, res) => {
         tipo: device.tipo?.nombre || "",
         marca: device.marca || "",
         modelo: device.modelo || "",
+        area: device.area?.nombre || "N/A", // 👈 CAMBIO
+        departamento: device.area?.departamento?.nombre || "N/A", // 👈 CAMBIO
         motivo_baja: device.motivo_baja || "N/A",
         observaciones_baja: device.observaciones_baja || "N/A",
       });
@@ -175,7 +185,8 @@ export const exportAllDevices = async (req, res) => {
       { header: "Modelo", key: "modelo", width: 20 },
       { header: "N° Serie", key: "numero_serie", width: 25 },
       { header: "Usuario Asignado", key: "usuario", width: 30 },
-      { header: "Departamento", key: "departamento", width: 25 },
+      { header: "Área", key: "area", width: 25 }, // 👈 CAMBIO: Agregar área
+      { header: "Departamento", key: "departamento", width: 25 }, // 👈 CAMBIO: Agregar departamento
       { header: "Estado", key: "estado", width: 15 },
       { header: "Sistema Operativo", key: "so", width: 25 },
     ];
@@ -188,7 +199,8 @@ export const exportAllDevices = async (req, res) => {
         modelo: device.modelo || "",
         numero_serie: device.numero_serie || "",
         usuario: device.usuario?.nombre || "N/A",
-        departamento: device.departamento?.nombre || "N/A",
+        area: device.area?.nombre || "N/A", // 👈 CAMBIO
+        departamento: device.area?.departamento?.nombre || "N/A", // 👈 CAMBIO
         estado: device.estado?.nombre || "N/A",
         so: device.sistema_operativo?.nombre || "N/A",
       });

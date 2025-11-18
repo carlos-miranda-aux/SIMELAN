@@ -3,11 +3,12 @@ import cors from "cors";
 import dotenv from "dotenv";
 import prisma from "./PrismaClient.js";
 import bcrypt from "bcryptjs";
-import cron from "node-cron"; // 👈 AÑADIR IMPORT DE CRON
-import { sendMaintenanceReminder } from "./utils/email.service.js"; // 👈 AÑADIR IMPORT DEL EMAILER
+import cron from "node-cron"; 
+import { sendMaintenanceReminder } from "./utils/email.service.js"; 
 
 // Importar rutas
 import departmentRoutes from "./routes/department.routes.js";
+import areaRoutes from "./routes/area.routes.js"; // 👈 NUEVA RUTA
 import osRoutes from "./routes/operatingSystem.routes.js";
 import deviceTypeRoutes from "./routes/deviceType.routes.js";
 import deviceStatusRoutes from "./routes/deviceStatus.routes.js";
@@ -25,6 +26,7 @@ app.use(express.json());
 
 // rutas
 app.use("/api/departments", departmentRoutes);
+app.use("/api/areas", areaRoutes); // 👈 USAR RUTA
 app.use("/api/operating-systems", osRoutes);
 app.use("/api/device-types", deviceTypeRoutes);
 app.use("/api/device-status", deviceStatusRoutes);
@@ -43,7 +45,6 @@ app.listen(PORT, async () => {
     await prisma.$connect();
     console.log("Conectado a la BD");
 
-    // ... (Lógica del superusuario existente) ...
     const superAdmin = await prisma.userSistema.findFirst({
       where: { username: "superadmin", rol: "ADMIN" }
     });
@@ -60,27 +61,20 @@ app.listen(PORT, async () => {
         },
       });
       console.log("Superusuario creado:", user.username);
-    } else {
-      console.log("Superusuario ya existe:", superAdmin.username);
-    }
+    } 
   } catch (err) {
     console.error("Error al conectar a la DB o crear superusuario:", err);
   }
 
-  // 👇 --- INICIO DE CÓDIGO NUEVO (TAREA PROGRAMADA) --- 👇
-
-  // '0 7 * * *' = "Ejecutar todos los días a las 7:00 AM"
-  console.log("Tarea programada de recordatorios configurada para ejecutarse a las 7:00 AM.");
+  // --- TAREA PROGRAMADA (CRON) ---
+  console.log("Tarea programada de recordatorios configurada (7:00 AM).");
   
+  //cron.schedule('* * * * *', async () => {
   cron.schedule('0 7 * * *', async () => {
-  //cron.schedule('* * * * *', async () => {  // PARA PRUEBAS: Ejecutar cada minuto
-
-    console.log('Ejecutando tarea programada (7:00 AM): Buscando mantenimientos...');
-    
+    console.log('Ejecutando tarea programada (7:00 AM)...');
     try {
-      // 1. Definir las fechas clave
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Normalizar al inicio del día
+      today.setHours(0, 0, 0, 0);
 
       const fiveDaysFromNow = new Date(today);
       fiveDaysFromNow.setDate(today.getDate() + 5);
@@ -88,51 +82,43 @@ app.listen(PORT, async () => {
       const oneDayFromNow = new Date(today);
       oneDayFromNow.setDate(today.getDate() + 1);
 
-      // 2. Buscar mantenimientos que coincidan con 5 días o 1 día
       const maintenances = await prisma.maintenance.findMany({
         where: {
           estado: 'pendiente',
           OR: [
-            { fecha_programada: { gte: fiveDaysFromNow, lt: new Date(fiveDaysFromNow.getTime() + 24 * 60 * 60 * 1000) } }, // 5 días
-            { fecha_programada: { gte: oneDayFromNow, lt: new Date(oneDayFromNow.getTime() + 24 * 60 * 60 * 1000) } }  // 1 día
+            { fecha_programada: { gte: fiveDaysFromNow, lt: new Date(fiveDaysFromNow.getTime() + 24 * 60 * 60 * 1000) } },
+            { fecha_programada: { gte: oneDayFromNow, lt: new Date(oneDayFromNow.getTime() + 24 * 60 * 60 * 1000) } }
           ]
         },
         include: {
-          device: { // Incluir dispositivo
+          device: { 
             include: {
-              usuario: true, // Incluir usuario asignado
-              departamento: true, // Incluir departamento
-              tipo: true, // Incluir tipo de dispositivo
+              usuario: true,
+              area: true, // 👈 Incluimos el ÁREA
+              tipo: true,
             }
           }
         }
       });
 
-      if (maintenances.length === 0) {
-        console.log("No hay mantenimientos programados para enviar recordatorios hoy.");
-        return;
-      }
+      if (maintenances.length === 0) return;
 
-      console.log(`Se encontraron ${maintenances.length} mantenimientos para notificar.`);
-
-      // 3. Procesar cada mantenimiento
       for (const maint of maintenances) {
         const device = maint.device;
-        if (!device || !device.departamentoId) {
-          console.log(`Mantenimiento ID ${maint.id} omitido (sin dispositivo o departamento).`);
+        // Validamos que el dispositivo tenga un área asignada
+        if (!device || !device.areaId) {
           continue;
         }
 
-        // 4. Buscar al Jefe de Área
+        // 👈 BÚSQUEDA ACTUALIZADA: Buscamos al jefe de ESTA ÁREA
         const manager = await prisma.user.findFirst({
           where: {
-            departamentoId: device.departamentoId,
+            areaId: device.areaId, // Coincide con el área del equipo
             es_jefe_de_area: true,
           }
         });
 
         if (manager && manager.correo) {
-          // 5. Determinar cuántos días faltan y enviar el correo
           const maintDate = new Date(maint.fecha_programada);
           maintDate.setHours(0, 0, 0, 0);
 
@@ -145,11 +131,10 @@ app.listen(PORT, async () => {
       }
 
     } catch (cronError) {
-      console.error("Error durante la ejecución de la tarea programada:", cronError);
+      console.error("Error CRON:", cronError);
     }
   }, {
     scheduled: true,
-    timezone: "America/Cancun" // Asegúrate de usar tu zona horaria
+    timezone: "America/Cancun"
   });
-  // 👆 --- FIN DE CÓDIGO NUEVO --- 👆
 });

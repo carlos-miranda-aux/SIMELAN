@@ -1,16 +1,10 @@
-// src/services/device.service.js
 import prisma from "../../src/PrismaClient.js";
 
 export const getActiveDevices = async ({ skip, take, search }) => {
   const whereClause = {
-    estado: {
-      NOT: {
-        nombre: "Baja",
-      },
-    },
+    estado: { NOT: { nombre: "Baja" } },
   };
 
-  // 👈 CORRECCIÓN: Lógica de búsqueda
   if (search) {
     whereClause.OR = [
       { etiqueta: { contains: search } },
@@ -31,7 +25,7 @@ export const getActiveDevices = async ({ skip, take, search }) => {
         estado: true,
         sistema_operativo: true,
         maintenances: true,
-        departamento: true,
+        area: { include: { departamento: true } }, // 👈 Incluir Area y Depto
       },
       skip: skip,
       take: take,
@@ -45,11 +39,7 @@ export const getActiveDevices = async ({ skip, take, search }) => {
 
 export const getAllActiveDeviceNames = () =>
   prisma.device.findMany({
-    where: {
-      estado: {
-        NOT: { nombre: "Baja" },
-      },
-    },
+    where: { estado: { NOT: { nombre: "Baja" } } },
     select: {
       id: true,
       etiqueta: true,
@@ -61,14 +51,11 @@ export const getAllActiveDeviceNames = () =>
 
 export const getInactiveDevices = async ({ skip, take, search }) => {
   const whereClause = {
-    estado: {
-      nombre: "Baja",
-    },
+    estado: { nombre: "Baja" },
   };
 
-  // 👈 CORRECCIÓN: Lógica de búsqueda para bajas
   if (search) {
-    whereClause.AND = { // Usamos AND para combinar con el estado 'Baja'
+    whereClause.AND = {
       OR: [
         { etiqueta: { contains: search } },
         { nombre_equipo: { contains: search } },
@@ -86,7 +73,7 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
         tipo: true,
         estado: true,
         sistema_operativo: true,
-        departamento: true,
+        area: { include: { departamento: true } }, // 👈 Incluir Area y Depto
       },
       skip: skip,
       take: take,
@@ -98,7 +85,6 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
   return { devices, totalCount };
 };
 
-// ... (Resto de funciones: getDeviceById, createDevice, etc. SIN CAMBIOS)
 export const getDeviceById = (id) =>
   prisma.device.findUnique({
     where: { id: Number(id) },
@@ -107,19 +93,14 @@ export const getDeviceById = (id) =>
       tipo: true,
       estado: true,
       sistema_operativo: true,
-      departamento: true,
+      area: { include: { departamento: true } }, // 👈 Incluir
     },
   });
 
 export const createDevice = (data) => prisma.device.create({ data });
 
 export const deleteDevice = (id) =>
-  prisma.device.delete({
-    where: { id: Number(id) },
-  });
+  prisma.device.delete({ where: { id: Number(id) } });
 
 export const updateDevice = (id, data) =>
-  prisma.device.update({
-    where: { id: Number(id) },
-    data,
-  });
+  prisma.device.update({ where: { id: Number(id) }, data });

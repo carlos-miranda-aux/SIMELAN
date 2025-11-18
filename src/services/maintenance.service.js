@@ -30,7 +30,6 @@ export const getMaintenances = async ({ skip, take, where }) => {
 
   return { maintenances, totalCount };
 };
-
 // --- El resto de funciones (sin cambios) ---
 
 export const getMaintenanceById = (id) =>
@@ -40,7 +39,11 @@ export const getMaintenanceById = (id) =>
       device: {
         include: {
           usuario: true,
-          departamento: true,
+          area: { // 👈 CORRECCIÓN: Usar la relación 'area'
+            include: {
+              departamento: true // 👈 Y luego incluir el departamento
+            }
+          },
           tipo: true,
         },
       },

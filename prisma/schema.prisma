@@ -55,22 +55,22 @@ model User {
 
 model Device {
   id                   Int      @id @default(autoincrement())
-  etiqueta             String   @unique
-  nombre_equipo        String?
+  etiqueta             String?   @unique
+  nombre_equipo        String
   descripcion          String?
-  ip_equipo            String?
+  ip_equipo            String
   usuario              User?    @relation(fields: [usuarioId], references: [id])
   usuarioId            Int?
   departamento         Department? @relation(fields: [departamentoId], references: [id])
-  departamentoId       Int?
-  tipoId               Int?
+  departamentoId       Int
+  tipoId               Int
   tipo                 DeviceType? @relation(fields: [tipoId], references: [id])
-  marca                String?
-  modelo               String?
+  marca                String
+  modelo               String
   numero_serie         String   @unique
-  estadoId             Int?
+  estadoId             Int
   estado               DeviceStatus? @relation(fields: [estadoId], references: [id])
-  sistemaOperativoId   Int?
+  sistemaOperativoId   Int
   sistema_operativo    OperatingSystem? @relation(fields: [sistemaOperativoId], references: [id])
   licencia_so          String?
   office_version       String?
@@ -86,8 +86,8 @@ model Device {
 
   fecha_proxima_revision DateTime?
 
-  motivo_baja          String?   @db.VarChar(191)
-  observaciones_baja   String?   @db.Text
+  motivo_baja          String   @db.VarChar(191)
+  observaciones_baja   String   @db.Text
 
   maintenances Maintenance[]
 
@@ -100,15 +100,15 @@ model Device {
 
 model Maintenance {
   id                Int      @id @default(autoincrement())
-  descripcion       String?
-  fecha_programada  DateTime?
+  descripcion       String
+  fecha_programada  DateTime
   fecha_realizacion DateTime?
   estado            String   @default("pendiente")
   device            Device   @relation(fields: [deviceId], references: [id])
   deviceId          Int
   
-  diagnostico         String?   @db.Text
-  acciones_realizadas String?   @db.Text
+  diagnostico         String   @db.Text
+  acciones_realizadas String   @db.Text
   observaciones       String?   @db.Text
 
   @@index([deviceId])

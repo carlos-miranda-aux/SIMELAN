@@ -48,10 +48,6 @@ export const getMaintenances = async (req, res) => {
   }
 };
 
-// ... (El resto del archivo MANTENLO IGUAL a la versión corregida que te di antes, 
-// incluyendo getMaintenance, create, update, delete, y las exportaciones corregidas).
-// Solo modifiqué 'getMaintenances' aquí para agregar la búsqueda.
-// Asegúrate de conservar las funciones de exportación corregidas que ya tienes.
 export const getMaintenance = async (req, res) => {
   try {
     const maintenance = await maintenanceService.getMaintenanceById(req.params.id);
@@ -97,6 +93,12 @@ export const deleteMaintenance = async (req, res) => {
   try {
     const oldMaintenance = await maintenanceService.getMaintenanceById(req.params.id);
     if (!oldMaintenance) return res.status(404).json({ message: "Maintenance not found" });
+
+    // 👇 CORRECCIÓN: Evitar la eliminación si el mantenimiento ya está en historial
+    if (oldMaintenance.estado === 'realizado' || oldMaintenance.estado === 'cancelado') {
+      return res.status(403).json({ message: "No se puede eliminar un mantenimiento que ya forma parte del historial (realizado o cancelado)." });
+    }
+
     await maintenanceService.deleteMaintenance(req.params.id);
     res.json({ message: "Maintenance deleted" });
   } catch (error) {
@@ -122,6 +124,9 @@ export const exportMaintenances = async (req, res) => {
       { header: "Estado", key: "estado", width: 15 },
       { header: "Fecha Programada", key: "fecha_programada", width: 20 },
       { header: "Fecha Realización", key: "fecha_realizacion", width: 20 },
+      // 👇 AGREGAR COLUMNAS PARA ÁREA Y DEPARTAMENTO
+      { header: "Área", key: "area", width: 20 },
+      { header: "Departamento", key: "departamento", width: 20 },
     ];
 
     allMaintenances.forEach((m) => {
@@ -132,6 +137,9 @@ export const exportMaintenances = async (req, res) => {
         estado: m.estado,
         fecha_programada: m.fecha_programada ? new Date(m.fecha_programada).toLocaleDateString() : "N/A",
         fecha_realizacion: m.fecha_realizacion ? new Date(m.fecha_realizacion).toLocaleDateString() : "N/A",
+        // 👇 AGREGAR DATOS DE ÁREA Y DEPARTAMENTO
+        area: m.device?.area?.nombre || "N/A",
+        departamento: m.device?.area?.departamento?.nombre || "N/A",
       });
     });
     
@@ -149,6 +157,7 @@ export const exportMaintenances = async (req, res) => {
 export const exportIndividualMaintenance = async (req, res) => {
   try {
     const { id } = req.params;
+    // Asegúrate de que getMaintenanceById trae el device.area.departamento (esto ya está en service)
     const maintenance = await maintenanceService.getMaintenanceById(id);
 
     if (!maintenance) return res.status(404).json({ error: "Mantenimiento no encontrado" });
@@ -191,66 +200,73 @@ export const exportIndividualMaintenance = async (req, res) => {
     userTitle.font = { bold: true };
     userTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
 
+    // CAMBIO 1: Se muestra el Usuario Asignado y el Área en la fila 8
     worksheet.getCell('A8').value = "Usuario Asignado";
     worksheet.getCell('B8').value = device.usuario?.nombre || "No asignado";
-    worksheet.getCell('C8').value = "Departamento";
-    worksheet.getCell('D8').value = device.departamento?.nombre || "N/A";
+    worksheet.getCell('C8').value = "Área"; 
+    worksheet.getCell('D8').value = device.area?.nombre || "N/A"; // Área
 
-    worksheet.mergeCells('A10:D10');
-    const mantoTitle = worksheet.getCell('A10');
+    // CAMBIO 2: Se corrige el acceso al Departamento en la nueva fila 9
+    worksheet.getCell('A9').value = "Departamento";
+    worksheet.mergeCells('B9:D9'); 
+    worksheet.getCell('B9').value = device.area?.departamento?.nombre || "N/A"; // Departamento
+
+    // Re-indexar todas las filas siguientes sumando 1 al número de fila anterior:
+    worksheet.mergeCells('A11:D11'); 
+    const mantoTitle = worksheet.getCell('A11');
     mantoTitle.value = "Detalles del Servicio";
     mantoTitle.font = { bold: true };
     mantoTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
 
-    worksheet.getCell('A11').value = "Estado";
-    worksheet.getCell('B11').value = maintenance.estado;
+    worksheet.getCell('A12').value = "Estado";
+    worksheet.getCell('B12').value = maintenance.estado;
     
-    worksheet.getCell('A12').value = "Fecha Programada";
-    worksheet.getCell('B12').value = maintenance.fecha_programada ? new Date(maintenance.fecha_programada).toLocaleDateString() : "N/A";
-    worksheet.getCell('C12').value = "Fecha Realización";
-    worksheet.getCell('D12').value = maintenance.fecha_realizacion ? new Date(maintenance.fecha_realizacion).toLocaleDateString() : "N/A";
+    worksheet.getCell('A13').value = "Fecha Programada";
+    worksheet.getCell('B13').value = maintenance.fecha_programada ? new Date(maintenance.fecha_programada).toLocaleDateString() : "N/A";
+    worksheet.getCell('C13').value = "Fecha Realización";
+    worksheet.getCell('D13').value = maintenance.fecha_realizacion ? new Date(maintenance.fecha_realizacion).toLocaleDateString() : "N/A";
 
-    worksheet.mergeCells('A13:B13');
-    worksheet.getCell('A13').value = "Descripción Programada:";
-    worksheet.mergeCells('A14:D16'); 
-    const descCell = worksheet.getCell('A14');
+    worksheet.mergeCells('A14:B14'); 
+    worksheet.getCell('A14').value = "Descripción Programada:";
+    worksheet.mergeCells('A15:D17'); 
+    const descCell = worksheet.getCell('A15'); 
     descCell.value = maintenance.descripcion;
     descCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
 
-    worksheet.mergeCells('A18:D18');
-    const reporteTitle = worksheet.getCell('A18');
+    worksheet.mergeCells('A19:D19'); 
+    const reporteTitle = worksheet.getCell('A19');
     reporteTitle.value = "Reporte del Técnico";
     reporteTitle.font = { bold: true };
     reporteTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFE0E0E0'} };
 
-    worksheet.mergeCells('A19:B19');
-    worksheet.getCell('A19').value = "Diagnóstico (Qué encontró):";
-    worksheet.mergeCells('A20:D23');
-    const diagCell = worksheet.getCell('A20');
+    worksheet.mergeCells('A20:B20'); 
+    worksheet.getCell('A20').value = "Diagnóstico (Qué encontró):";
+    worksheet.mergeCells('A21:D24'); 
+    const diagCell = worksheet.getCell('A21'); 
     diagCell.value = maintenance.diagnostico || (maintenance.estado === 'realizado' ? 'No especificado' : 'N/A');
     diagCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
 
-    worksheet.mergeCells('A24:B24');
-    worksheet.getCell('A24').value = "Acciones Realizadas (Qué hizo):";
-    worksheet.mergeCells('A25:D28');
-    const accCell = worksheet.getCell('A25');
+    worksheet.mergeCells('A25:B25'); 
+    worksheet.getCell('A25').value = "Acciones Realizadas (Qué hizo):";
+    worksheet.mergeCells('A26:D29'); 
+    const accCell = worksheet.getCell('A26'); 
     accCell.value = maintenance.acciones_realizadas || (maintenance.estado === 'realizado' ? 'No especificado' : 'N/A');
     accCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
     
-    worksheet.mergeCells('A29:B29');
-    worksheet.getCell('A29').value = "Observaciones Adicionales:";
-    worksheet.mergeCells('A30:D32');
-    const obsCell = worksheet.getCell('A30');
+    worksheet.mergeCells('A30:B30'); 
+    worksheet.getCell('A30').value = "Observaciones Adicionales:";
+    worksheet.mergeCells('A31:D33'); 
+    const obsCell = worksheet.getCell('A31'); 
     obsCell.value = maintenance.observaciones || (maintenance.estado === 'realizado' ? 'No especificado' : 'N/A');
     obsCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
     
-    worksheet.getCell('A34').value = "Técnico Realiza:";
-    worksheet.mergeCells('B34:C34');
-    worksheet.getCell('B34').border = { bottom: { style: 'thin' } };
+    worksheet.getCell('A35').value = "Técnico Realiza:";
+    worksheet.mergeCells('B35:C35');
+    worksheet.getCell('B35').border = { bottom: { style: 'thin' } };
     
-    worksheet.getCell('A36').value = "Usuario Recibe:";
-    worksheet.mergeCells('B36:C36');
-    worksheet.getCell('B36').border = { bottom: { style: 'thin' } };
+    worksheet.getCell('A37').value = "Usuario Recibe:";
+    worksheet.mergeCells('B37:C37');
+    worksheet.getCell('B37').border = { bottom: { style: 'thin' } };
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename=Servicio_Manto_${id}.xlsx`);

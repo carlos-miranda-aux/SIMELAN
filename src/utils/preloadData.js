@@ -19,7 +19,7 @@ export const preloadMasterData = async () => {
         "División Cuartos",
         "Spa", 
         "Golden Shores",
-        "Sistemas",     //aqui entra los equipos de business center, servidores y equipos de backup
+        "TI",     //aqui entra los equipos de business center, servidores y equipos de backup
     ];
 
     const deptCount = await prisma.department.count();
@@ -62,6 +62,8 @@ export const preloadMasterData = async () => {
             { nombre: "Compras", deptoName: "Contraloría" },
             { nombre: "Almacén", deptoName: "Contraloría" },
             { nombre: "Costos", deptoName: "Contraloría" },
+            { nombre: "Calidad", deptoName: "Contraloría" },
+
             
             // Ventas
             { nombre: "Ventas", deptoName: "Ventas" },
@@ -83,16 +85,17 @@ export const preloadMasterData = async () => {
             { nombre: "Areas Publicas", deptoName: "División Cuartos" },
             { nombre: "Seguridad", deptoName: "División Cuartos" },
             { nombre: "Lavanderia", deptoName: "División Cuartos" },
+            { nombre: "División Cuartos", deptoName: "División Cuartos" },
+            { nombre: "Telefonos", deptoName: "División Cuartos" },
+
 
             // Spa
             { nombre: "Spa", deptoName: "Spa" },
 
             // Golden Shores
-            { nombre: "Concierge GS", deptoName: "Golden Shores" },
-            { nombre: "Ventas GS", deptoName: "Golden Shores" },
-            { nombre: "Administración GS", deptoName: "Golden Shores" },
+            { nombre: "Golden Shores", deptoName: "Golden Shores" },
 
-            // Sistemas
+            // TI
             { nombre: "Business Center", deptoName: "Sistemas" },
             { nombre: "Servidores", deptoName: "sistemas" },
             { nombre: "Backup", deptoName: "sistemas" },
@@ -117,6 +120,7 @@ export const preloadMasterData = async () => {
             prisma.deviceType.create({ data: { nombre: "Laptop" } }),
             prisma.deviceType.create({ data: { nombre: "Estación" } }),
             prisma.deviceType.create({ data: { nombre: "Servidor" } }),
+            prisma.deviceType.create({ data: { nombre: "AIO" } }),
         ]);
     }
     

@@ -51,7 +51,7 @@ model DeviceStatus {
 model User {
   id              Int      @id @default(autoincrement())
   nombre          String
-  correo          String   @unique
+  correo          String
   
   // Cambio: Ahora se relaciona con AREA, no directo con Departamento
   area            Area?    @relation(fields: [areaId], references: [id])
@@ -74,6 +74,7 @@ model Device {
   nombre_equipo            String 
   descripcion              String?
   ip_equipo                String?
+  perfiles_usuario         String?
   
   usuario                  User?     @relation(fields: [usuarioId], references: [id])
   usuarioId                Int?

@@ -22,7 +22,6 @@ export const getUsers = async (req, res) => {
   }
 };
 
-// ... (Resto de funciones: getAllUsers, getUser, etc. SIN CAMBIOS)
 export const getAllUsers = async (req, res) => {
   try {
     const users = await userService.getAllUsers();
@@ -75,28 +74,40 @@ export const deleteUser = async (req, res) => {
 
 export const exportUsers = async (req, res) => {
   try {
+    // Obtenemos todos los usuarios (sin paginación)
     const { users } = await userService.getUsers({ skip: 0, take: undefined }); 
+    
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Usuarios Crown");
+    
+    // Definimos las columnas, agregando "Área" y ajustando "Departamento"
     worksheet.columns = [
       { header: "ID", key: "id", width: 10 },
       { header: "Nombre", key: "nombre", width: 30 },
       { header: "Correo", key: "correo", width: 30 },
+      { header: "Área", key: "area", width: 25 },          // 👈 Nueva columna
       { header: "Departamento", key: "departamento", width: 25 },
       { header: "Usuario de Login", key: "usuario_login", width: 20 },
     ];
+
     users.forEach((user) => {
       worksheet.addRow({
         id: user.id,
         nombre: user.nombre,
         correo: user.correo,
-        departamento: user.departamento?.nombre || "N/A",
+        // Accedemos a través de la relación: User -> Area -> Nombre
+        area: user.area?.nombre || "N/A", 
+        // Accedemos a través de la relación: User -> Area -> Departamento -> Nombre
+        departamento: user.area?.departamento?.nombre || "N/A",
         usuario_login: user.usuario_login || "N/A",
       });
     });
+
     worksheet.getRow(1).font = { bold: true };
+    
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", "attachment; filename=usuarios_crown.xlsx");
+    
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {

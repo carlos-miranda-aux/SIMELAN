@@ -69,6 +69,7 @@ export const preloadMasterData = async () => {
             { nombre: "Ventas", deptoName: "Ventas" },
             { nombre: "Grupos", deptoName: "Ventas" },
             { nombre: "Reservaciones", deptoName: "Ventas" },
+            { nombre: "Experiencia al Huesped", deptoName: "Ventas" },
             //{ nombre: "Bodas", deptoName: "Ventas" },
 
             // Alimentos y Bebidas

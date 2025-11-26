@@ -49,6 +49,8 @@ export const preloadMasterData = async () => {
         const AREAS = [
             // Gerencia General
             { nombre: "Gerencia General", deptoName: "Gerencia General" },
+            {nombre: "General", deptoName: "Gerencia General" },
+
 
             // Recursos Humanos
             { nombre: "Capital Humano", deptoName: "Capital Humano" },
@@ -63,11 +65,11 @@ export const preloadMasterData = async () => {
             { nombre: "Almacén", deptoName: "Contraloría" },
             { nombre: "Costos", deptoName: "Contraloría" },
             { nombre: "Calidad", deptoName: "Contraloría" },
+            { nombre: "Contraloría", deptoName: "Contraloría" },
 
             
             // Ventas
             { nombre: "Ventas", deptoName: "Ventas" },
-            { nombre: "Grupos", deptoName: "Ventas" },
             { nombre: "Reservaciones", deptoName: "Ventas" },
             { nombre: "Experiencia al Huesped", deptoName: "Ventas" },
             //{ nombre: "Bodas", deptoName: "Ventas" },
@@ -97,9 +99,8 @@ export const preloadMasterData = async () => {
             { nombre: "Golden Shores", deptoName: "Golden Shores" },
 
             // TI
-            { nombre: "Business Center", deptoName: "Sistemas" },
-            { nombre: "Servidores", deptoName: "sistemas" },
-            { nombre: "Backup", deptoName: "sistemas" },
+            { nombre: "Bussiness Center", deptoName: "TI" },
+            { nombre: "Servidores", deptoName: "TI" },
         ];
 
         await Promise.all(

@@ -2,9 +2,6 @@ import * as deviceService from "../services/device.service.js";
 import ExcelJS from "exceljs";
 import prisma from "../PrismaClient.js";
 
-// ... (getDevices, getAllActiveDeviceNames, getDevice, exportInactiveDevices, deleteDevice, importDevices SE QUEDAN IGUAL) ...
-// SOLO PONDRÉ LOS QUE CAMBIAN: createDevice, updateDevice, exportAllDevices
-
 export const getDevices = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -135,7 +132,7 @@ export const createDevice = async (req, res) => {
       tipoId: deviceData.tipoId ? Number(deviceData.tipoId) : null,
       sistemaOperativoId: deviceData.sistemaOperativoId ? Number(deviceData.sistemaOperativoId) : null,
       fecha_proxima_revision: fecha_proxima_revision || null,
-      perfiles_usuario: deviceData.perfiles_usuario || null, // 👈 NUEVO CAMPO
+      perfiles_usuario: deviceData.perfiles_usuario || null, 
       estadoId: estadoActivo.id,
     };
     const newDevice = await deviceService.createDevice(dataToCreate);
@@ -167,12 +164,10 @@ export const updateDevice = async (req, res) => {
     if (dataToUpdate.areaId !== undefined) {
         dataToUpdate.areaId = dataToUpdate.areaId ? Number(dataToUpdate.areaId) : null;
     }
-    // perfiles_usuario se pasa automáticamente aquí
     
     const disposedStatus = await prisma.deviceStatus.findFirst({ where: { nombre: "Baja" } });
     const disposedStatusId = disposedStatus?.id;
     
-    // Lógica de baja (se mantiene igual)
     if (oldDevice.estadoId === disposedStatusId && dataToUpdate.estadoId && dataToUpdate.estadoId !== disposedStatusId) {
         return res.status(403).json({ error: "No se puede reactivar un equipo que ya ha sido dado de baja." });
     } else if (oldDevice.estadoId === disposedStatusId) {
@@ -181,13 +176,9 @@ export const updateDevice = async (req, res) => {
         dataToUpdate.fecha_baja = new Date();
     }
     
-    // Lógica de mantenimiento preventivo (se mantiene igual)
     const { fecha_proxima_revision } = dataToUpdate;
     const oldRevisionDate = oldDevice.fecha_proxima_revision ? new Date(oldDevice.fecha_proxima_revision).toISOString().split('T')[0] : null;
-    if (fecha_proxima_revision && fecha_proxima_revision !== oldRevisionDate) {
-       // ... (lógica existente)
-    }
-
+    
     const updatedDevice = await deviceService.updateDevice(deviceId, dataToUpdate);
     res.json(updatedDevice);
   } catch (error) {
@@ -210,11 +201,16 @@ export const exportAllDevices = async (req, res) => {
       { header: "Modelo", key: "modelo", width: 20 },
       { header: "N° Serie", key: "numero_serie", width: 25 },
       { header: "Responsable (Jefe)", key: "usuario", width: 30 },
-      { header: "Perfiles Acceso", key: "perfiles", width: 40 }, // 👈 NUEVA COLUMNA
+      { header: "Perfiles Acceso", key: "perfiles", width: 40 },
       { header: "Área", key: "area", width: 25 },
       { header: "Departamento", key: "departamento", width: 25 },
       { header: "Estado", key: "estado", width: 15 },
       { header: "IP", key: "ip", width: 15 },
+      // 👇 COLUMNAS AGREGADAS PARA SO Y GARANTÍAS
+      { header: "Sistema Operativo", key: "sistema_operativo", width: 25 },
+      { header: "Licencia SO", key: "licencia_so", width: 25 },
+      { header: "Inicio Garantía", key: "garantia_inicio", width: 18 },
+      { header: "Fin Garantía", key: "garantia_fin", width: 18 },
     ];
 
     devices.forEach((device) => {
@@ -226,11 +222,16 @@ export const exportAllDevices = async (req, res) => {
         modelo: device.modelo || "",
         numero_serie: device.numero_serie || "",
         usuario: device.usuario?.nombre || "N/A",
-        perfiles: device.perfiles_usuario || "", // 👈 DATOS
+        perfiles: device.perfiles_usuario || "",
         area: device.area?.nombre || "N/A",
         departamento: device.area?.departamento?.nombre || "N/A",
         estado: device.estado?.nombre || "N/A",
         ip: device.ip_equipo || "",
+        // 👇 MAPEO DE DATOS
+        sistema_operativo: device.sistema_operativo?.nombre || "N/A",
+        licencia_so: device.licencia_so || "",
+        garantia_inicio: device.garantia_inicio ? new Date(device.garantia_inicio).toLocaleDateString() : "",
+        garantia_fin: device.garantia_fin ? new Date(device.garantia_fin).toLocaleDateString() : "",
       });
     });
     worksheet.getRow(1).font = { bold: true };

@@ -1,4 +1,3 @@
-// src/controllers/device.controller.js
 import * as deviceService from "../services/device.service.js";
 import ExcelJS from "exceljs";
 import prisma from "../PrismaClient.js";
@@ -40,6 +39,16 @@ export const getDevice = async (req, res) => {
     res.json(device);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener dispositivo" });
+  }
+};
+
+// NUEVO: Controller para obtener el estado de Panda para el dashboard
+export const getPandaStatus = async (req, res) => {
+  try {
+    const counts = await deviceService.getPandaStatusCounts();
+    res.json(counts);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener el estado de Panda" });
   }
 };
 
@@ -227,18 +236,23 @@ export const exportAllDevices = async (req, res) => {
       { header: "Modelo", key: "modelo", width: 20 },
       { header: "N° Serie", key: "numero_serie", width: 25 },
       { header: "Responsable (Jefe)", key: "usuario", width: 30 },
-      // 👇 NUEVA COLUMNA: Usuario de Login
+      // NUEVA COLUMNA: Usuario de Login
       { header: "Usuario de Login", key: "usuario_login", width: 25 },
       { header: "Perfiles Acceso", key: "perfiles", width: 40 },
       { header: "Área", key: "area", width: 25 },
       { header: "Departamento", key: "departamento", width: 25 },
       { header: "Estado", key: "estado", width: 15 },
       { header: "IP", key: "ip", width: 15 },
-      // 👇 COLUMNAS AGREGADAS PARA SO Y GARANTÍAS
+      // COLUMNAS DE SOFTWARE Y GARANTÍA
       { header: "Sistema Operativo", key: "sistema_operativo", width: 25 },
       { header: "Licencia SO", key: "licencia_so", width: 25 },
+      { header: "Version Office", key: "office_version", width: 18 },
+      { header: "Tipo Licencia", key: "office_tipo_licencia", width: 18 },
+      { header: "N Producto", key: "garantia_numero_producto", width: 25 },
       { header: "Inicio Garantía", key: "garantia_inicio", width: 18 },
       { header: "Fin Garantía", key: "garantia_fin", width: 18 },
+      // COLUMNA PANDA
+      { header: "¿Tiene Panda?", key: "es_panda", width: 15 },
     ];
 
     devices.forEach((device) => {
@@ -250,18 +264,23 @@ export const exportAllDevices = async (req, res) => {
         modelo: device.modelo || "",
         numero_serie: device.numero_serie || "",
         usuario: device.usuario?.nombre || "N/A",
-        // 👇 NUEVO VALOR: usuario_login
+        // NUEVO VALOR: usuario_login
         usuario_login: device.usuario?.usuario_login || "N/A",
         perfiles: device.perfiles_usuario || "",
         area: device.area?.nombre || "N/A",
         departamento: device.area?.departamento?.nombre || "N/A",
         estado: device.estado?.nombre || "N/A",
         ip: device.ip_equipo || "",
-        // 👇 MAPEO DE DATOS
+        // MAPEO DE DATOS
         sistema_operativo: device.sistema_operativo?.nombre || "N/A",
         licencia_so: device.licencia_so || "",
+        office_version: device.office_version || "",
+        office_tipo_licencia: device.office_tipo_licencia || "",
+        garantia_numero_producto: device.garantia_numero_producto || "",
         garantia_inicio: device.garantia_inicio ? new Date(device.garantia_inicio).toLocaleDateString() : "",
         garantia_fin: device.garantia_fin ? new Date(device.garantia_fin).toLocaleDateString() : "",
+        // VALOR PANDA
+        es_panda: device.es_panda ? "Sí" : "No",
       });
     });
     worksheet.getRow(1).font = { bold: true };

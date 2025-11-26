@@ -113,6 +113,8 @@ model Device {
   motivo_baja              String?   @db.VarChar(191)
   observaciones_baja       String?   @db.Text 
 
+  es_panda                 Boolean   @default(false)
+
   maintenances             Maintenance[]
 
   @@index([usuarioId])

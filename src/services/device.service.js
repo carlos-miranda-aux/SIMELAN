@@ -1,4 +1,3 @@
-// src/services/device.service.js
 import prisma from "../../src/PrismaClient.js";
 import ExcelJS from "exceljs";
 
@@ -117,6 +116,32 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
   return { devices, totalCount };
 };
 
+// NUEVA FUNCIÓN PARA OBTENER EL CONTEO DE ANTIVIRUS
+export const getPandaStatusCounts = async () => {
+    // Solo contamos los dispositivos activos
+    const totalActiveDevices = await prisma.device.count({
+        where: {
+            estado: { NOT: { nombre: "Baja" } }
+        }
+    });
+
+    const devicesWithPanda = await prisma.device.count({
+        where: {
+            estado: { NOT: { nombre: "Baja" } },
+            es_panda: true
+        }
+    });
+
+    // Se calcula el conteo de dispositivos sin Panda (críticos)
+    const devicesWithoutPanda = totalActiveDevices - devicesWithPanda;
+
+    return {
+        totalActiveDevices,
+        devicesWithPanda,
+        devicesWithoutPanda
+    };
+};
+
 // =====================================================================
 // SECCIÓN 2: IMPORTACIÓN MASIVA INTELIGENTE
 // =====================================================================
@@ -210,14 +235,18 @@ export const importDevicesFromExcel = async (buffer) => {
     // Descripción: "" si está vacía
     const descripcion = getVal('descripcion') || ""; 
     
-    // Office (Priorizando los encabezados exactos del usuario)
+    // Office
     const officeVersionStr = getVal('version office') || getVal('office version') || getVal('version de office') || getVal('office versión');
     const officeLicenseTypeStr = getVal('tipo licencia') || getVal('tipo de licencia') || getVal('licencia office') || getVal('tipo licencia office') || getVal('tipo de licencia office');
     
-    // Garantía (Priorizando los encabezados exactos del usuario)
+    // Garantía
     const garantiaNumProdStr = getVal('n producto') || getVal('garantia numero producto') || getVal('numero de producto de garantia') || getVal('garantia numero');
     const garantiaInicioStr = getVal('inicio garantia') || getVal('garantia inicio');
     const garantiaFinStr = getVal('fin garantia') || getVal('garantia fin');
+
+    // Detección de Panda (El encabezado "Panda" es cubierto por getVal('panda'))
+    const pandaStr = getVal('antivirus') || getVal('panda') || getVal('es panda');
+    const es_panda = cleanLower(pandaStr) === "si" || cleanLower(pandaStr) === "yes" || cleanLower(pandaStr) === "verdadero" || cleanLower(pandaStr) === "true";
 
 
     // Asignación de Usuario (prioridad por login)
@@ -276,7 +305,8 @@ export const importDevicesFromExcel = async (buffer) => {
         // CAMPOS DE GARANTÍA
         garantia_numero_producto: garantiaNumProdStr || null,
         garantia_inicio: parseDateForPrisma(garantiaInicioStr),
-        garantia_fin: parseDateForPrisma(garantiaFinStr)
+        garantia_fin: parseDateForPrisma(garantiaFinStr),
+        es_panda: es_panda, // Campo de Panda añadido
       },
       meta: {
         tipo: tipoStr || "Estación",

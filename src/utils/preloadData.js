@@ -142,7 +142,7 @@ export const preloadMasterData = async () => {
     // 5. Sistemas Operativos (CORREGIDO)
     // Usamos los nombres genéricos para que coincidan con la importación de Excel
     console.log("Verificando Sistemas Operativos...");
-    const OS_LIST = ["Windows 11", "Windows 10", "Windows 7", "Windows Server"];
+    const OS_LIST = ["Windows 11", "Windows 10", "Windows 7", "Windows Server", "Windows XP"];
     
     await Promise.all(
         OS_LIST.map(nombre => 

@@ -161,13 +161,35 @@ export const updateDevice = async (req, res) => {
     if (!oldDevice) return res.status(404).json({ error: "Dispositivo no encontrado" });
     
     const dataToUpdate = { ...req.body };
+
+    // --- BLOQUE DE LIMPIEZA DE DATOS ---
+    // Convertimos cadenas vacías "" a null, y strings numéricos a números reales.
+    
+    // 1. Área (Opcional)
     if (dataToUpdate.areaId !== undefined) {
         dataToUpdate.areaId = dataToUpdate.areaId ? Number(dataToUpdate.areaId) : null;
     }
+
+    // 2. Usuario Responsable (Opcional) - AQUÍ ESTABA EL ERROR
+    if (dataToUpdate.usuarioId !== undefined) {
+        dataToUpdate.usuarioId = dataToUpdate.usuarioId ? Number(dataToUpdate.usuarioId) : null;
+    }
+
+    // 3. Sistema Operativo (Opcional)
+    if (dataToUpdate.sistemaOperativoId !== undefined) {
+        dataToUpdate.sistemaOperativoId = dataToUpdate.sistemaOperativoId ? Number(dataToUpdate.sistemaOperativoId) : null;
+    }
+
+    // 4. Tipo y Estado (Obligatorios, pero nos aseguramos que sean números)
+    if (dataToUpdate.tipoId) dataToUpdate.tipoId = Number(dataToUpdate.tipoId);
+    if (dataToUpdate.estadoId) dataToUpdate.estadoId = Number(dataToUpdate.estadoId);
+
+    // ------------------------------------
     
     const disposedStatus = await prisma.deviceStatus.findFirst({ where: { nombre: "Baja" } });
     const disposedStatusId = disposedStatus?.id;
     
+    // Lógica de baja (se mantiene igual)
     if (oldDevice.estadoId === disposedStatusId && dataToUpdate.estadoId && dataToUpdate.estadoId !== disposedStatusId) {
         return res.status(403).json({ error: "No se puede reactivar un equipo que ya ha sido dado de baja." });
     } else if (oldDevice.estadoId === disposedStatusId) {
@@ -176,9 +198,12 @@ export const updateDevice = async (req, res) => {
         dataToUpdate.fecha_baja = new Date();
     }
     
+    // Lógica de mantenimiento preventivo
     const { fecha_proxima_revision } = dataToUpdate;
     const oldRevisionDate = oldDevice.fecha_proxima_revision ? new Date(oldDevice.fecha_proxima_revision).toISOString().split('T')[0] : null;
     
+    // ... (resto de la lógica de mantenimiento si la tienes)
+
     const updatedDevice = await deviceService.updateDevice(deviceId, dataToUpdate);
     res.json(updatedDevice);
   } catch (error) {

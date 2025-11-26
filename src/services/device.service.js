@@ -1,3 +1,4 @@
+// src/services/device.service.js
 import prisma from "../../src/PrismaClient.js";
 import ExcelJS from "exceljs";
 
@@ -138,7 +139,14 @@ export const importDevicesFromExcel = async (buffer) => {
   const cleanLower = (txt) => clean(txt).toLowerCase();
 
   // Mapas en memoria
-  const userMap = new Map(users.map(i => [cleanLower(i.nombre), i.id]));
+  // Mapear por usuario_login (Identificador principal para asignación)
+  const userLoginMap = new Map(users
+    .filter(i => i.usuario_login) // Solo usuarios que tengan un login definido
+    .map(i => [cleanLower(i.usuario_login), i.id])
+  );
+  // Mapa secundario para compatibilidad, usando el nombre
+  const userNameMap = new Map(users.map(i => [cleanLower(i.nombre), i.id]));
+  
   const areaMap = new Map();
   areas.forEach(a => {
     // Clave compuesta: "nombreArea|nombreDepto"
@@ -150,6 +158,19 @@ export const importDevicesFromExcel = async (buffer) => {
   worksheet.getRow(1).eachCell((cell, colNumber) => {
     headerMap[cleanLower(cell.value)] = colNumber;
   });
+  
+  // Helper para convertir cadena de fecha a formato ISO o null
+  const parseDateForPrisma = (dateStr) => {
+      if (!dateStr) return null;
+      try {
+          const date = new Date(dateStr);
+          // Si la fecha es válida, la devuelve como ISO string, si no, null
+          return isNaN(date.getTime()) ? null : date.toISOString();
+      } catch (e) {
+          return null;
+      }
+  };
+
 
   // 3. Leer Filas y Preparar Datos
   worksheet.eachRow((row, rowNumber) => {
@@ -167,37 +188,64 @@ export const importDevicesFromExcel = async (buffer) => {
     const nombreRaw = getVal('nombre equipo') || getVal('nombre');
     const serieRaw = getVal('n° serie') || getVal('serie') || getVal('numero serie') || getVal('serial');
     
-    // Estos campos se procesarán para crear catálogos si no existen
+    // Catálogos
     const tipoStr = getVal('tipo');
     const estadoStr = getVal('estado');
     
-    // Captura robusta de Sistema Operativo
+    // Sistema Operativo
     const rawOS = getVal('sistema operativo') || getVal('so') || getVal('os');
     let osStr = null;
     if (rawOS) {
-        // Normalizar "windows 10" -> "Windows 10" (Capitalize)
         const trimmed = rawOS.trim().toLowerCase();
         osStr = trimmed.charAt(0).toUpperCase() + trimmed.slice(1); 
     }
 
     const marca = getVal('marca') || "Genérico";
     const modelo = getVal('modelo') || "Genérico";
-    const ip_equipo = getVal('ip') || getVal('ip equipo');
-    const descripcion = getVal('descripcion') || "Importado masivamente";
     
-    const responsableStr = getVal('responsable (jefe)') || getVal('responsable') || getVal('usuario');
+    // IP: DHCP si está vacío
+    const ip_equipo_raw = getVal('ip') || getVal('ip equipo');
+    const ip_equipo = ip_equipo_raw || "DHCP";
+    
+    // Descripción: "" si está vacía
+    const descripcion = getVal('descripcion') || ""; 
+    
+    // Office (Priorizando los encabezados exactos del usuario)
+    const officeVersionStr = getVal('version office') || getVal('office version') || getVal('version de office') || getVal('office versión');
+    const officeLicenseTypeStr = getVal('tipo licencia') || getVal('tipo de licencia') || getVal('licencia office') || getVal('tipo licencia office') || getVal('tipo de licencia office');
+    
+    // Garantía (Priorizando los encabezados exactos del usuario)
+    const garantiaNumProdStr = getVal('n producto') || getVal('garantia numero producto') || getVal('numero de producto de garantia') || getVal('garantia numero');
+    const garantiaInicioStr = getVal('inicio garantia') || getVal('garantia inicio');
+    const garantiaFinStr = getVal('fin garantia') || getVal('garantia fin');
+
+
+    // Asignación de Usuario (prioridad por login)
+    const responsableLoginStr = getVal('usuario de login') || getVal('usuario login') || getVal('login') || getVal('usuarios') || getVal('usuario');
+    const responsableNameStr = getVal('responsable (jefe') || getVal('responsable');
+    
     const perfilesStr = getVal('perfiles acceso') || getVal('perfiles') || getVal('perfiles de usuario');
     
     const areaStr = getVal('área') || getVal('area');
     const deptoStr = getVal('departamento');
 
-    // --- Valores por Defecto (Para evitar rechazos) ---
+    // --- Valores por Defecto ---
     const nombre_equipo = nombreRaw || `Equipo Fila ${rowNumber}`;
-    // Si no hay serie, generamos una única para cumplir restricción UNIQUE
     const numero_serie = serieRaw || `SN-GEN-${rowNumber}-${Date.now().toString().slice(-4)}`;
 
     // Resolver IDs existentes
-    const usuarioId = userMap.get(cleanLower(responsableStr)) || null;
+    let usuarioId = null;
+    
+    // 1. Intentar por Login (prioridad)
+    if (responsableLoginStr) {
+        usuarioId = userLoginMap.get(cleanLower(responsableLoginStr));
+    }
+    
+    // 2. Si no se encuentra, intentar por Nombre (retrocompatibilidad)
+    if (!usuarioId && responsableNameStr) {
+        usuarioId = userNameMap.get(cleanLower(responsableNameStr));
+    }
+
 
     let areaId = null;
     if (areaStr && deptoStr) {
@@ -217,16 +265,23 @@ export const importDevicesFromExcel = async (buffer) => {
         numero_serie,
         marca,
         modelo,
-        ip_equipo: ip_equipo || null,
-        descripcion,
+        ip_equipo: ip_equipo,
+        descripcion, 
         perfiles_usuario: perfilesStr || null,
-        usuarioId,
-        areaId
+        usuarioId, 
+        areaId,
+        // CAMPOS DE OFFICE
+        office_version: officeVersionStr || null,
+        office_tipo_licencia: officeLicenseTypeStr || null,
+        // CAMPOS DE GARANTÍA
+        garantia_numero_producto: garantiaNumProdStr || null,
+        garantia_inicio: parseDateForPrisma(garantiaInicioStr),
+        garantia_fin: parseDateForPrisma(garantiaFinStr)
       },
       meta: {
-        tipo: tipoStr || "Estación",   // Default si viene vacío
-        estado: estadoStr || "Activo", // Default si viene vacío
-        os: osStr                      // Puede ser null
+        tipo: tipoStr || "Estación",
+        estado: estadoStr || "Activo",
+        os: osStr
       }
     });
   });

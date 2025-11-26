@@ -1,3 +1,4 @@
+// src/controllers/device.controller.js
 import * as deviceService from "../services/device.service.js";
 import ExcelJS from "exceljs";
 import prisma from "../PrismaClient.js";
@@ -61,7 +62,7 @@ export const exportInactiveDevices = async (req, res) => {
     devices.forEach((device, index) => {
       worksheet.addRow({
         numero: index + 1,
-        etiqueta: device.etiqueta || "",
+        etiqueta: device.etiqueta || "N/A",
         tipo: device.tipo?.nombre || "",
         marca: device.marca || "",
         modelo: device.modelo || "",
@@ -226,6 +227,8 @@ export const exportAllDevices = async (req, res) => {
       { header: "Modelo", key: "modelo", width: 20 },
       { header: "N° Serie", key: "numero_serie", width: 25 },
       { header: "Responsable (Jefe)", key: "usuario", width: 30 },
+      // 👇 NUEVA COLUMNA: Usuario de Login
+      { header: "Usuario de Login", key: "usuario_login", width: 25 },
       { header: "Perfiles Acceso", key: "perfiles", width: 40 },
       { header: "Área", key: "area", width: 25 },
       { header: "Departamento", key: "departamento", width: 25 },
@@ -247,6 +250,8 @@ export const exportAllDevices = async (req, res) => {
         modelo: device.modelo || "",
         numero_serie: device.numero_serie || "",
         usuario: device.usuario?.nombre || "N/A",
+        // 👇 NUEVO VALOR: usuario_login
+        usuario_login: device.usuario?.usuario_login || "N/A",
         perfiles: device.perfiles_usuario || "",
         area: device.area?.nombre || "N/A",
         departamento: device.area?.departamento?.nombre || "N/A",

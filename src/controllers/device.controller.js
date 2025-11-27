@@ -310,3 +310,56 @@ export const exportAllDevices = async (req, res) => {
     res.status(500).json({ error: "Error al exportar inventario" });
   }
 };
+
+export const exportCorrectiveAnalysis = async (req, res) => {
+    try {
+        // Capturar los parámetros de fecha de la query (opcionales)
+        const { startDate, endDate } = req.query; 
+
+        // Llamar al servicio con los filtros de fecha
+        const analysisData = await deviceService.getExpiredWarrantyAnalysis(startDate, endDate);
+        
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Análisis Garantía/Correctivos");
+
+        // 👈 COLUMNAS EXACTAS SOLICITADAS
+        worksheet.columns = [
+            { header: "Etiqueta", key: "etiqueta", width: 15 },
+            { header: "Nombre Equipo", key: "nombre_equipo", width: 30 },
+            { header: "N° Serie", key: "numero_serie", width: 25 },
+            { header: "Marca", key: "marca", width: 20 },
+            { header: "Modelo", key: "modelo", width: 20 },
+            { header: "Fin Garantía", key: "garantia_fin", width: 18 },
+            { header: "Días Expirado", key: "daysExpired", width: 18 },
+            { header: "Correctivos Totales", key: "correctiveCount", width: 25 },
+            { header: "Último Correctivo", key: "lastCorrective", width: 20 },
+            { header: "Total Horas Manto.", key: "totalHours", width: 20 } 
+        ];
+
+        analysisData.forEach((d) => {
+            worksheet.addRow({
+                etiqueta: d.etiqueta,
+                nombre_equipo: d.nombre_equipo,
+                numero_serie: d.numero_serie,
+                marca: d.marca,
+                modelo: d.modelo,
+                // Formatear fechas para Excel
+                garantia_fin: d.garantia_fin ? new Date(d.garantia_fin).toLocaleDateString() : "N/A",
+                daysExpired: d.daysExpired !== null ? d.daysExpired : "N/A",
+                correctiveCount: d.correctiveCount,
+                lastCorrective: d.lastCorrective ? new Date(d.lastCorrective).toLocaleDateString() : "N/A",
+                totalHours: 0, 
+            });
+        });
+
+        worksheet.getRow(1).font = { bold: true };
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", "attachment; filename=analisis_garantia_correctivos.xlsx");
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (error) {
+        console.error("Error al exportar el análisis:", error);
+        res.status(500).json({ error: "Error al exportar el análisis de garantía y correctivos." });
+    }
+};

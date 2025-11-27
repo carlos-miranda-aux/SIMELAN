@@ -11,6 +11,7 @@ import {
   exportInactiveDevices,
   exportAllDevices,
   importDevices,
+  exportCorrectiveAnalysis,
   getPandaStatus // 👈 Se mantiene
 } from "../controllers/device.controller.js";
 import {verifyRole, verifyToken} from "../middlewares/auth.middleware.js"
@@ -31,5 +32,7 @@ router.get("/export/inactivos", verifyToken, verifyRole(["ADMIN", "EDITOR"]), ex
 router.get("/export/all", verifyToken, verifyRole(["ADMIN", "EDITOR"]), exportAllDevices);
 
 router.post("/import", verifyToken, verifyRole(["ADMIN"]), upload.single("file"), importDevices);
+
+router.get("/export/corrective-analysis", verifyToken, verifyRole(["ADMIN", "EDITOR"]), exportCorrectiveAnalysis);
 
 export default router;

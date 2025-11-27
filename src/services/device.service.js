@@ -438,3 +438,74 @@ export const importDevicesFromExcel = async (buffer) => {
 
   return { successCount, errors };
 };
+
+export const getExpiredWarrantyAnalysis = async (startDate, endDate) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); 
+    
+    // 1. Encontrar todos los dispositivos activos cuya garantía haya expirado
+    const devices = await prisma.device.findMany({
+        where: {
+            estado: { NOT: { nombre: "Baja" } },
+            garantia_fin: {
+                lt: today.toISOString() // Garantía Final es menor que hoy (expirada)
+            }
+        },
+        include: {
+            tipo: { select: { nombre: true } },
+            maintenances: { // Incluimos todos los mantenimientos
+                select: {
+                    estado: true,
+                    tipo_mantenimiento: true,
+                    fecha_realizacion: true,
+                },
+                where: {
+                    estado: 'realizado', // Solo nos interesan los que se realizaron
+                    tipo_mantenimiento: 'Correctivo', // Y que sean correctivos
+                    // Aplicar filtro de fecha SOLO a la fecha de realización
+                    fecha_realizacion: {
+                        ...(startDate && { gte: new Date(startDate).toISOString() }),
+                        ...(endDate && { lte: new Date(endDate).toISOString() }),
+                    }
+                },
+                orderBy: {
+                    fecha_realizacion: 'desc'
+                }
+            },
+        },
+        orderBy: {
+            garantia_fin: 'asc' // Ordenar por la que expiró primero
+        }
+    });
+
+    return devices.map(d => {
+        const correctives = d.maintenances.filter(m => 
+             m.tipo_mantenimiento === 'Correctivo' && m.estado === 'realizado'
+        );
+        
+        const lastCorrectiveDate = correctives.length > 0 
+            ? correctives[0].fecha_realizacion 
+            : null;
+        
+        // Cálculo de días expirados (siempre contra la fecha actual)
+        const warrantyEnd = d.garantia_fin ? new Date(d.garantia_fin) : null;
+        let daysExpired = null;
+        if (warrantyEnd) {
+            const diffTime = today.getTime() - warrantyEnd.getTime();
+            daysExpired = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        return {
+            etiqueta: d.etiqueta || "N/A",
+            nombre_equipo: d.nombre_equipo || "N/A",
+            numero_serie: d.numero_serie || "N/A",
+            marca: d.marca || "N/A",
+            modelo: d.modelo || "N/A",
+            garantia_fin: warrantyEnd,
+            daysExpired: daysExpired,
+            correctiveCount: correctives.length,
+            lastCorrective: lastCorrectiveDate,
+            // (Total Horas no se calcula en esta versión)
+        };
+    });
+};

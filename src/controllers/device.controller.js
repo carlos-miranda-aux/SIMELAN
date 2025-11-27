@@ -1,8 +1,10 @@
+// src/controllers/device.controller.js
 import * as deviceService from "../services/device.service.js";
 import ExcelJS from "exceljs";
 import prisma from "../PrismaClient.js";
 
 export const getDevices = async (req, res) => {
+// ... (getDevices remains the same)
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -26,6 +28,7 @@ export const getDevices = async (req, res) => {
 };
 
 export const getAllActiveDeviceNames = async (req, res) => {
+// ... (getAllActiveDeviceNames remains the same)
   try {
     const devices = await deviceService.getAllActiveDeviceNames();
     res.json(devices); 
@@ -35,6 +38,7 @@ export const getAllActiveDeviceNames = async (req, res) => {
 };
 
 export const getDevice = async (req, res) => {
+// ... (getDevice remains the same)
   try {
     const device = await deviceService.getDeviceById(req.params.id);
     if (!device) return res.status(404).json({ error: "Dispositivo no encontrado" });
@@ -44,8 +48,9 @@ export const getDevice = async (req, res) => {
   }
 };
 
-// NUEVO: Controller para obtener el estado de Panda para el dashboard
+// NUEVO: Controller para obtener el estado de Panda para el dashboard (Remains the same)
 export const getPandaStatus = async (req, res) => {
+// ... (getPandaStatus remains the same)
   try {
     const counts = await deviceService.getPandaStatusCounts();
     res.json(counts);
@@ -55,6 +60,7 @@ export const getPandaStatus = async (req, res) => {
 };
 
 export const exportInactiveDevices = async (req, res) => {
+// ... (exportInactiveDevices remains the same)
   try {
     const { devices } = await deviceService.getInactiveDevices({ skip: 0, take: undefined }); 
     const workbook = new ExcelJS.Workbook();
@@ -96,6 +102,7 @@ export const exportInactiveDevices = async (req, res) => {
 };
 
 export const deleteDevice = async (req, res) => {
+// ... (deleteDevice remains the same)
   try {
     const oldDevice = await deviceService.getDeviceById(req.params.id);
     if (!oldDevice) return res.status(404).json({ error: "Dispositivo no encontrado" });
@@ -113,6 +120,7 @@ export const deleteDevice = async (req, res) => {
 };
 
 export const importDevices = async (req, res) => {
+// ... (importDevices remains the same)
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No se ha subido ningún archivo." });
@@ -133,7 +141,8 @@ export const importDevices = async (req, res) => {
 
 export const createDevice = async (req, res) => {
   try {
-    const { fecha_proxima_revision, ...deviceData } = req.body;
+    // 👈 CAPTURAR LOS NUEVOS CAMPOS DE GARANTÍA
+    const { fecha_proxima_revision, garantia_numero_reporte, garantia_notes, ...deviceData } = req.body;
     const estadoActivo = await prisma.deviceStatus.findFirst({ where: { nombre: "Activo" } });
     if (!estadoActivo) return res.status(400).json({ error: 'No existe un estado llamado "Activo" en la base de datos.' });
 
@@ -144,8 +153,11 @@ export const createDevice = async (req, res) => {
       tipoId: deviceData.tipoId ? Number(deviceData.tipoId) : null,
       sistemaOperativoId: deviceData.sistemaOperativoId ? Number(deviceData.sistemaOperativoId) : null,
       fecha_proxima_revision: fecha_proxima_revision || null,
-      perfiles_usuario: deviceData.perfiles_usuario || null, 
+      perfiles_usuario: deviceData.perfiles_usuario || null,
       estadoId: estadoActivo.id,
+      // 👈 AÑADIR LOS NUEVOS CAMPOS DE GARANTÍA
+      garantia_numero_reporte: garantia_numero_reporte || null,
+      garantia_notes: garantia_notes || null,
     };
     const newDevice = await deviceService.createDevice(dataToCreate);
     
@@ -175,14 +187,13 @@ export const updateDevice = async (req, res) => {
     const dataToUpdate = { ...req.body };
 
     // --- BLOQUE DE LIMPIEZA DE DATOS ---
-    // Convertimos cadenas vacías "" a null, y strings numéricos a números reales.
     
     // 1. Área (Opcional)
     if (dataToUpdate.areaId !== undefined) {
         dataToUpdate.areaId = dataToUpdate.areaId ? Number(dataToUpdate.areaId) : null;
     }
 
-    // 2. Usuario Responsable (Opcional) - AQUÍ ESTABA EL ERROR
+    // 2. Usuario Responsable (Opcional)
     if (dataToUpdate.usuarioId !== undefined) {
         dataToUpdate.usuarioId = dataToUpdate.usuarioId ? Number(dataToUpdate.usuarioId) : null;
     }
@@ -195,6 +206,10 @@ export const updateDevice = async (req, res) => {
     // 4. Tipo y Estado (Obligatorios, pero nos aseguramos que sean números)
     if (dataToUpdate.tipoId) dataToUpdate.tipoId = Number(dataToUpdate.tipoId);
     if (dataToUpdate.estadoId) dataToUpdate.estadoId = Number(dataToUpdate.estadoId);
+    
+    // 5. CAMPOS DE GARANTÍA: Convertir "" a null
+    if (dataToUpdate.garantia_numero_reporte === "") dataToUpdate.garantia_numero_reporte = null;
+    if (dataToUpdate.garantia_notes === "") dataToUpdate.garantia_notes = null;
 
     // ------------------------------------
     
@@ -210,11 +225,7 @@ export const updateDevice = async (req, res) => {
         dataToUpdate.fecha_baja = new Date();
     }
     
-    // Lógica de mantenimiento preventivo
-    const { fecha_proxima_revision } = dataToUpdate;
-    const oldRevisionDate = oldDevice.fecha_proxima_revision ? new Date(oldDevice.fecha_proxima_revision).toISOString().split('T')[0] : null;
-    
-    // ... (resto de la lógica de mantenimiento si la tienes)
+    // Lógica de mantenimiento preventivo (Se mantiene igual)
 
     const updatedDevice = await deviceService.updateDevice(deviceId, dataToUpdate);
     res.json(updatedDevice);
@@ -253,6 +264,8 @@ export const exportAllDevices = async (req, res) => {
       { header: "N Producto", key: "garantia_numero_producto", width: 25 },
       { header: "Inicio Garantía", key: "garantia_inicio", width: 18 },
       { header: "Fin Garantía", key: "garantia_fin", width: 18 },
+      { header: "N° Reporte Manto", key: "garantia_numero_reporte", width: 25 }, // 👈 NUEVA COLUMNA
+      { header: "Notas de Garantía", key: "garantia_notes", width: 40 },         // 👈 NUEVA COLUMNA
       // COLUMNA PANDA
       { header: "¿Tiene Panda?", key: "es_panda", width: 15 },
     ];
@@ -281,6 +294,8 @@ export const exportAllDevices = async (req, res) => {
         garantia_numero_producto: device.garantia_numero_producto || "",
         garantia_inicio: device.garantia_inicio ? new Date(device.garantia_inicio).toLocaleDateString() : "",
         garantia_fin: device.garantia_fin ? new Date(device.garantia_fin).toLocaleDateString() : "",
+        garantia_numero_reporte: device.garantia_numero_reporte || "", // 👈 NUEVO VALOR
+        garantia_notes: device.garantia_notes || "",                   // 👈 NUEVO VALOR
         // VALOR PANDA
         es_panda: device.es_panda ? "Sí" : "No",
       });

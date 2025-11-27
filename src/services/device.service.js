@@ -1,3 +1,5 @@
+// src/services/device.service.js
+
 import prisma from "../../src/PrismaClient.js";
 import ExcelJS from "exceljs";
 
@@ -22,26 +24,31 @@ export const getActiveDevices = async ({ skip, take, search, filter }) => { // �
     ];
   }
   
-  // 👇 NUEVA LÓGICA DE FILTRADO
+  // 👇 LÓGICA DE FILTRADO
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); 
+  const ninetyDaysFromNow = new Date(today);
+  ninetyDaysFromNow.setDate(today.getDate() + 90);
+  ninetyDaysFromNow.setHours(23, 59, 59, 999); 
+  
   if (filter === 'no-panda') {
       whereClause.AND = whereClause.AND || [];
       whereClause.AND.push({ es_panda: false });
   } else if (filter === 'warranty-risk') {
-      // Filtrar por equipos cuya garantía finaliza en los próximos 90 días
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); 
-
-      const ninetyDaysFromNow = new Date();
-      ninetyDaysFromNow.setDate(today.getDate() + 90);
-      ninetyDaysFromNow.setHours(23, 59, 59, 999); // Incluir todo el último día
-      
+      // Garantías por vencer (90 días)
       whereClause.AND = whereClause.AND || [];
       whereClause.AND.push({
           garantia_fin: {
-              // Debe ser mayor o igual a hoy (es decir, aún vigente)
               gte: today.toISOString(), 
-              // Y menor o igual a 90 días a partir de hoy
               lte: ninetyDaysFromNow.toISOString() 
+          }
+      });
+  } else if (filter === 'expired-warranty') {
+      // Garantías ya vencidas (Fecha Fin < Hoy)
+      whereClause.AND = whereClause.AND || [];
+      whereClause.AND.push({
+          garantia_fin: {
+              lt: today.toISOString()
           }
       });
   }
@@ -140,7 +147,7 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
   return { devices, totalCount };
 };
 
-// NUEVA FUNCIÓN PARA OBTENER EL CONTEO DE ANTIVIRUS
+// FUNCIÓN PARA OBTENER EL CONTEO DE PANDA Y GARANTÍAS VENCIDAS
 export const getPandaStatusCounts = async () => {
     // Solo contamos los dispositivos activos
     const totalActiveDevices = await prisma.device.count({
@@ -156,18 +163,33 @@ export const getPandaStatusCounts = async () => {
         }
     });
 
+    // 👇 CONTEO DE GARANTÍAS VENCIDAS
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); 
+
+    const expiredWarrantiesCount = await prisma.device.count({
+        where: {
+            estado: { NOT: { nombre: "Baja" } },
+            garantia_fin: {
+                lt: today.toISOString()
+            }
+        }
+    });
+    // ---------------------------------
+
     // Se calcula el conteo de dispositivos sin Panda (críticos)
     const devicesWithoutPanda = totalActiveDevices - devicesWithPanda;
 
     return {
         totalActiveDevices,
         devicesWithPanda,
-        devicesWithoutPanda
+        devicesWithoutPanda,
+        expiredWarrantiesCount // 👈 EXPONER EL CONTEO
     };
 };
 
 // =====================================================================
-// SECCIÓN 2: IMPORTACIÓN MASIVA INTELIGENTE
+// SECCIÓN 2: IMPORTACIÓN MASIVA INTELIGENTE (omitted for brevity)
 // =====================================================================
 
 export const importDevicesFromExcel = async (buffer) => {

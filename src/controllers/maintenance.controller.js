@@ -60,6 +60,7 @@ export const getMaintenance = async (req, res) => {
 
 export const createMaintenance = async (req, res) => {
   try {
+    // 👈 El service espera el cuerpo completo (incluyendo tipo_mantenimiento)
     const newMaintenance = await maintenanceService.createMaintenance(req.body);
     res.status(201).json(newMaintenance);
   } catch (error) {
@@ -120,6 +121,7 @@ export const exportMaintenances = async (req, res) => {
     worksheet.columns = [
       { header: "ID Manto", key: "id", width: 10 },
       { header: "Equipo Etiqueta", key: "etiqueta", width: 20 },
+      { header: "Tipo Mantenimiento", key: "tipo_mantenimiento", width: 25 }, // 👈 NUEVA COLUMNA
       { header: "Descripción", key: "descripcion", width: 40 },
       { header: "Estado", key: "estado", width: 15 },
       { header: "Fecha Programada", key: "fecha_programada", width: 20 },
@@ -133,6 +135,7 @@ export const exportMaintenances = async (req, res) => {
       worksheet.addRow({
         id: m.id,
         etiqueta: m.device?.etiqueta || "N/A",
+        tipo_mantenimiento: m.tipo_mantenimiento || "N/A", // 👈 NUEVO VALOR
         descripcion: m.descripcion || "",
         estado: m.estado,
         fecha_programada: m.fecha_programada ? new Date(m.fecha_programada).toLocaleDateString() : "N/A",
@@ -157,7 +160,6 @@ export const exportMaintenances = async (req, res) => {
 export const exportIndividualMaintenance = async (req, res) => {
   try {
     const { id } = req.params;
-    // Asegúrate de que getMaintenanceById trae el device.area.departamento (esto ya está en service)
     const maintenance = await maintenanceService.getMaintenanceById(id);
 
     if (!maintenance) return res.status(404).json({ error: "Mantenimiento no encontrado" });
@@ -200,13 +202,11 @@ export const exportIndividualMaintenance = async (req, res) => {
     userTitle.font = { bold: true };
     userTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
 
-    // CAMBIO 1: Se muestra el Usuario Asignado y el Área en la fila 8
     worksheet.getCell('A8').value = "Usuario Asignado";
     worksheet.getCell('B8').value = device.usuario?.nombre || "No asignado";
     worksheet.getCell('C8').value = "Área"; 
     worksheet.getCell('D8').value = device.area?.nombre || "N/A"; // Área
 
-    // CAMBIO 2: Se corrige el acceso al Departamento en la nueva fila 9
     worksheet.getCell('A9').value = "Departamento";
     worksheet.mergeCells('B9:D9'); 
     worksheet.getCell('B9').value = device.area?.departamento?.nombre || "N/A"; // Departamento
@@ -218,9 +218,12 @@ export const exportIndividualMaintenance = async (req, res) => {
     mantoTitle.font = { bold: true };
     mantoTitle.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
 
-    worksheet.getCell('A12').value = "Estado";
-    worksheet.getCell('B12').value = maintenance.estado;
+    worksheet.getCell('A12').value = "Tipo"; // 👈 NUEVA FILA
+    worksheet.getCell('B12').value = maintenance.tipo_mantenimiento || 'N/A'; // 👈 NUEVO VALOR
+    worksheet.getCell('C12').value = "Estado";
+    worksheet.getCell('D12').value = maintenance.estado;
     
+
     worksheet.getCell('A13').value = "Fecha Programada";
     worksheet.getCell('B13').value = maintenance.fecha_programada ? new Date(maintenance.fecha_programada).toLocaleDateString() : "N/A";
     worksheet.getCell('C13').value = "Fecha Realización";

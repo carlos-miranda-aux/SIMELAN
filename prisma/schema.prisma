@@ -102,9 +102,13 @@ model Device {
   office_tipo_licencia     String?
   office_serial            String?
   office_key               String?
-  garantia_numero_producto String?
+
   garantia_inicio          DateTime?
   garantia_fin             DateTime?
+  garantia_numero_producto String?
+  garantia_numero_reporte  String?   // <--- NUEVO: Número de reporte del proveedor
+  garantia_notes           String?   @db.Text
+
   created_at               DateTime  @default(now())
   updated_at               DateTime  @updatedAt
   
@@ -130,6 +134,7 @@ model Maintenance {
   fecha_programada    DateTime?
   fecha_realizacion   DateTime?
   estado              String    @default("pendiente")
+  tipo_mantenimiento  String    @default("Preventivo") @db.VarChar(191)
   
   device              Device    @relation(fields: [deviceId], references: [id])
   deviceId            Int

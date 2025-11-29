@@ -51,6 +51,17 @@ export const getActiveDevices = async ({ skip, take, search, filter }) => { // �
               lt: today.toISOString()
           }
       });
+  } else if (filter === 'safe-warranty') {
+      // 👇 NUEVO FILTRO: Garantías vigentes (más de 90 días O sin fecha de fin)
+      whereClause.AND = whereClause.AND || [];
+      whereClause.AND.push({
+          OR: [
+              // Garantía es mayor a 90 días a partir de hoy
+              { garantia_fin: { gt: ninetyDaysFromNow.toISOString() } },
+              // No tiene fecha de fin (se considera segura/no aplica)
+              { garantia_fin: null }
+          ]
+      });
   }
 
   const [devices, totalCount] = await prisma.$transaction([

@@ -70,10 +70,10 @@ app.listen(PORT, async () => {
   }
 
   // --- TAREA PROGRAMADA (CRON) ---
-  console.log("Tarea programada de recordatorios configurada (7:00 AM).");
+  console.log("Tarea programada de recordatorios configurada (9:00 AM).");
   
   //cron.schedule('* * * * *', async () => {
-  cron.schedule('0 7 * * *', async () => {
+  cron.schedule('0 9 * * *', async () => {
     console.log('Ejecutando tarea programada (7:00 AM)...');
     try {
       const today = new Date();

@@ -73,6 +73,9 @@ model Device {
   etiqueta                 String?   
   nombre_equipo            String 
   descripcion              String?
+
+  comentarios              String?   @db.Text
+
   ip_equipo                String?
   perfiles_usuario         String?
   

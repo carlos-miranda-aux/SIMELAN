@@ -21,10 +21,11 @@ export const getActiveDevices = async ({ skip, take, search, filter, sortBy, ord
       { modelo: { contains: search } },
       { ip_equipo: { contains: search } },
       { perfiles_usuario: { contains: search } },
+      { comentarios: { contains: search } }, // 👈 AÑADIDO: Búsqueda en comentarios
     ];
   }
   
-  // 👇 LÓGICA DE FILTRADO (Se mantiene igual)
+  // 👇 LÓGICA DE FILTRADO
   const today = new Date();
   today.setHours(0, 0, 0, 0); 
   const ninetyDaysFromNow = new Date(today);
@@ -56,15 +57,13 @@ export const getActiveDevices = async ({ skip, take, search, filter, sortBy, ord
   let orderByClause = {};
   if (sortBy) {
       if (sortBy.includes('.')) {
-          // Manejar relaciones (ej: 'tipo.nombre' -> { tipo: { nombre: 'asc' } })
           const [relation, field] = sortBy.split('.');
           orderByClause = { [relation]: { [field]: order } };
       } else {
-          // Campo simple
           orderByClause = { [sortBy]: order };
       }
   } else {
-      orderByClause = { id: 'desc' }; // Default
+      orderByClause = { id: 'desc' }; 
   }
 
   const [devices, totalCount] = await prisma.$transaction([
@@ -80,17 +79,13 @@ export const getActiveDevices = async ({ skip, take, search, filter, sortBy, ord
       },
       skip: skip,
       take: take,
-      orderBy: orderByClause // 👈 Usamos la cláusula dinámica
+      orderBy: orderByClause 
     }),
     prisma.device.count({ where: whereClause }),
   ]);
 
   return { devices, totalCount };
 };
-
-// ... (Resto de funciones: createDevice, updateDevice, deleteDevice... se mantienen IGUAL) ...
-// (Para ahorrar espacio, asumo que mantienes el resto del archivo como estaba,
-// ya que solo modificamos `getActiveDevices` y las importaciones)
 
 export const createDevice = (data) => prisma.device.create({ data });
 
@@ -269,6 +264,8 @@ export const importDevicesFromExcel = async (buffer) => {
     const ip_equipo = ip_equipo_raw || "DHCP";
     
     const descripcion = getVal('descripcion') || ""; 
+    // 👇 NUEVO: Importar comentarios
+    const comentarios = getVal('comentarios') || getVal('observaciones') || getVal('notas');
     
     const officeVersionStr = getVal('version office') || getVal('office version') || getVal('version de office') || getVal('office versión');
     const officeLicenseTypeStr = getVal('tipo licencia') || getVal('tipo de licencia') || getVal('licencia office') || getVal('tipo licencia office') || getVal('tipo de licencia office');
@@ -319,6 +316,7 @@ export const importDevicesFromExcel = async (buffer) => {
         modelo,
         ip_equipo: ip_equipo,
         descripcion, 
+        comentarios: comentarios || null, // 👈 Se guarda aquí
         perfiles_usuario: perfilesStr || null,
         usuarioId, 
         areaId,

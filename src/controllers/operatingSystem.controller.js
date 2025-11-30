@@ -1,58 +1,76 @@
-import {
-  getOperatingSystems,
-  getOperatingSystemById,
-  createOperatingSystem,
-  updateOperatingSystem,
-  deleteOperatingSystem
-} from "../services/operatingSystem.service.js";
+import * as operatingSystemService from "../services/operatingSystem.service.js";
 
-export const getOperatingSystemsController = async (req, res) => {
+export const getOperatingSystems = async (req, res) => {
   try {
-    const systems = await getOperatingSystems();
-    res.json(systems);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const sortBy = req.query.sortBy || "nombre";
+    const order = req.query.order || "asc";
+    const skip = (page - 1) * limit;
+
+    // Selector: Si limit es 0, devolvemos todo sin paginar
+    if (isNaN(limit) || limit === 0 || req.query.limit === '0') {
+        const allOs = await operatingSystemService.getAllOperatingSystems();
+        return res.json(allOs);
+    }
+
+    // Tabla: Paginado y ordenado
+    const { operatingSystems, totalCount } = await operatingSystemService.getOperatingSystems({ 
+        skip, 
+        take: limit, 
+        sortBy, 
+        order 
+    });
+
+    res.json({
+      data: operatingSystems,
+      totalCount: totalCount,
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / limit)
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-export const getOperatingSystemController = async (req, res) => {
+export const getOperatingSystem = async (req, res) => {
   try {
-    const { id } = req.params;
-    const system = await getOperatingSystemById(id);
-    if (!system) return res.status(404).json({ message: "OperatingSystem not found" });
-    res.json(system);
+    const os = await operatingSystemService.getOperatingSystemById(req.params.id);
+    if (!os) return res.status(404).json({ message: "Operating System not found" });
+    res.json(os);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-export const createOperatingSystemController = async (req, res) => {
+export const createOperatingSystem = async (req, res) => {
   try {
-    const newSystem = await createOperatingSystem(req.body);
-    res.status(201).json(newSystem);
+    const os = await operatingSystemService.createOperatingSystem(req.body);
+    res.status(201).json(os);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-export const updateOperatingSystemController = async (req, res) => {
+export const updateOperatingSystem = async (req, res) => {
   try {
-    const oldSystem = await getOperatingSystemById(req.params.id);
-    if (!oldSystem) return res.status(404).json({ message: "OperatingSystem not found" });
-    const updatedSystem = await updateOperatingSystem(req.params.id, req.body);
-    res.json(updatedSystem);
+    const oldOs = await operatingSystemService.getOperatingSystemById(req.params.id);
+    if (!oldOs) return res.status(404).json({ message: "Operating System not found" });
+    const os = await operatingSystemService.updateOperatingSystem(req.params.id, req.body);
+    res.json(os);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-export const deleteOperatingSystemController = async (req, res) => {
+export const deleteOperatingSystem = async (req, res) => {
   try {
-    const oldSystem = await getOperatingSystemById(req.params.id);
-    if (!oldSystem) return res.status(404).json({ message: "OperatingSystem not found" });
-    await deleteOperatingSystem(req.params.id);
-    res.json({ message: "OperatingSystem deleted" });
+    const oldOs = await operatingSystemService.getOperatingSystemById(req.params.id);
+    if (!oldOs) return res.status(404).json({ message: "Operating System not found" });
+    await operatingSystemService.deleteOperatingSystem(req.params.id);
+    res.json({ message: "Operating System deleted" });
   } catch (error) {
+    if (error.code === 'P2003') return res.status(400).json({ error: "No se puede eliminar porque está en uso." });
     res.status(500).json({ error: error.message });
   }
 };

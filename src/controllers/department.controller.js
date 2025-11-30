@@ -4,26 +4,21 @@ export const getDepartments = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    // 👇 Params
+    const sortBy = req.query.sortBy || "nombre";
+    const order = req.query.order || "asc";
     const skip = (page - 1) * limit;
 
-    // Si limit no se pide (o es inválido), se asume que se pide la lista completa para un selector (formularios)
     if (isNaN(limit) || limit === 0 || req.query.limit === undefined || req.query.limit === '0') {
-        const departments = await departmentService.getAllDepartments();
+        const departments = await departmentService.getAllDepartments(); // No paginado
         return res.json(departments);
     }
     
-    // Paginación para la tabla de AdminSettings
-    const { departments, totalCount } = await departmentService.getDepartments({ skip, take: limit });
+    // Pasamos sortBy y order
+    const { departments, totalCount } = await departmentService.getDepartments({ skip, take: limit, sortBy, order });
 
-    res.json({
-      data: departments,
-      totalCount: totalCount,
-      currentPage: page,
-      totalPages: Math.ceil(totalCount / limit)
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    res.json({ data: departments, totalCount: totalCount, currentPage: page, totalPages: Math.ceil(totalCount / limit) });
+  } catch (error) { res.status(500).json({ error: error.message }); }
 };
 
 export const getDepartment = async (req, res) => {

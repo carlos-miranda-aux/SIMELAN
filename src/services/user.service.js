@@ -3,7 +3,7 @@ import prisma from "../../src/PrismaClient.js";
 import ExcelJS from "exceljs";
 
 // --- Funciones CRUD normales (Sin cambios) ---
-export const getUsers = async ({ skip, take, search }) => {
+export const getUsers = async ({ skip, take, search, sortBy, order }) => {
   const whereClause = search ? {
     OR: [
       { nombre: { contains: search } },
@@ -11,6 +11,17 @@ export const getUsers = async ({ skip, take, search }) => {
       { usuario_login: { contains: search } }
     ]
   } : {};
+
+  // Construcción dinámica del ordenamiento
+  let orderBy = { nombre: 'asc' };
+  if (sortBy) {
+      if (sortBy.includes('.')) {
+          const [relation, field] = sortBy.split('.');
+          orderBy = { [relation]: { [field]: order } };
+      } else {
+          orderBy = { [sortBy]: order };
+      }
+  }
 
   const [users, totalCount] = await prisma.$transaction([
     prisma.user.findMany({
@@ -20,7 +31,7 @@ export const getUsers = async ({ skip, take, search }) => {
       },
       skip: skip,
       take: take,
-      orderBy: { nombre: 'asc' }
+      orderBy: orderBy // 👈 Usamos el objeto dinámico
     }),
     prisma.user.count({ where: whereClause })
   ]);

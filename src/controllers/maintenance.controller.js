@@ -7,21 +7,18 @@ export const getMaintenances = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const statusFilter = req.query.status || null;
-    const search = req.query.search || ""; // 👈 Capturamos búsqueda
-    const skip = (page - 1) * limit;
-
-    const whereClause = {};
+    const search = req.query.search || "";
+    // 👇 Nuevos params
+    const sortBy = req.query.sortBy || "fecha_programada";
+    const order = req.query.order || "desc";
     
-    // Filtro de estado
-    if (statusFilter === 'pendiente') {
-      whereClause.estado = 'pendiente';
-    } else if (statusFilter === 'historial') {
-      whereClause.estado = { in: ['realizado', 'cancelado'] };
-    }
+    const skip = (page - 1) * limit;
+    const whereClause = {};
+    if (statusFilter === 'pendiente') whereClause.estado = 'pendiente';
+    else if (statusFilter === 'historial') whereClause.estado = { in: ['realizado', 'cancelado'] };
 
-    // 👈 CORRECCIÓN: Filtro de búsqueda combinado con estado
     if (search) {
-      whereClause.AND = { // Usamos AND para respetar el filtro de estado si existe
+      whereClause.AND = {
         OR: [
           { descripcion: { contains: search } },
           { device: { etiqueta: { contains: search } } },
@@ -33,19 +30,13 @@ export const getMaintenances = async (req, res) => {
     const { maintenances, totalCount } = await maintenanceService.getMaintenances({ 
       skip, 
       take: limit, 
-      where: whereClause 
+      where: whereClause,
+      sortBy, // 👈 Pasamos
+      order 
     });
 
-    res.json({
-      data: maintenances,
-      totalCount: totalCount,
-      currentPage: page,
-      totalPages: Math.ceil(totalCount / limit)
-    });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    res.json({ data: maintenances, totalCount: totalCount, currentPage: page, totalPages: Math.ceil(totalCount / limit) });
+  } catch (error) { res.status(500).json({ error: error.message }); }
 };
 
 export const getMaintenance = async (req, res) => {

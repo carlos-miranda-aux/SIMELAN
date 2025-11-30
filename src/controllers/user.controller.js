@@ -5,11 +5,28 @@ import ExcelJS from "exceljs";
 export const getUsers = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const search = req.query.search || ""; // 👈 Capturamos búsqueda
+    // Si limit viene como '0', lo tratamos como 0 numérico para el if, sino default 10
+    const limitParam = req.query.limit; 
+    const limit = (limitParam === '0') ? 0 : (parseInt(limitParam) || 10);
+    
+    const sortBy = req.query.sortBy || "nombre";
+    const order = req.query.order || "asc";
+    
     const skip = (page - 1) * limit;
 
-    const { users, totalCount } = await userService.getUsers({ skip, take: limit, search });
+    // 👈 CORRECCIÓN: Si el límite es 0, devolvemos TODOS los usuarios en formato Array simple
+    if (limit === 0) {
+        const { users } = await userService.getUsers({ 
+            skip: 0, 
+            take: undefined, // undefined hace que Prisma traiga todo
+            sortBy, 
+            order 
+        });
+        return res.json(users);
+    }
+
+    // Respuesta Paginada (Objeto)
+    const { users, totalCount } = await userService.getUsers({ skip, take: limit, search: req.query.search, sortBy, order });
 
     res.json({
       data: users,
@@ -34,7 +51,7 @@ export const getAllUsers = async (req, res) => {
 export const getUser = async (req, res) => {
   try {
     const user = await userService.getUserById(req.params.id);
-    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+    if (!user) return res.status(404).json({ message: "User not found" });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -43,8 +60,8 @@ export const getUser = async (req, res) => {
 
 export const createUser = async (req, res) => {
   try {
-    const newUser = await userService.createUser(req.body);
-    res.status(201).json(newUser);
+    const user = await userService.createUser(req.body);
+    res.status(201).json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -52,10 +69,8 @@ export const createUser = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    const oldUser = await userService.getUserById(req.params.id);
-    if (!oldUser) return res.status(404).json({ message: "Usuario no encontrado" });
-    const updatedUser = await userService.updateUser(req.params.id, req.body);
-    res.json(updatedUser);
+    const user = await userService.updateUser(req.params.id, req.body);
+    res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -63,15 +78,12 @@ export const updateUser = async (req, res) => {
 
 export const deleteUser = async (req, res) => {
   try {
-    const oldUser = await userService.getUserById(req.params.id);
-    if (!oldUser) return res.status(404).json({ message: "Usuario no encontrado" });
     await userService.deleteUser(req.params.id);
-    res.json({ message: "Usuario eliminado" });
+    res.json({ message: "User deleted" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
-
 export const exportUsers = async (req, res) => {
   try {
     // Obtenemos todos los usuarios (sin paginación)
@@ -117,20 +129,11 @@ export const exportUsers = async (req, res) => {
 };
 
 export const importUsers = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No se ha subido ningún archivo." });
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      const result = await userService.importUsersFromExcel(req.file.buffer);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
-    
-    const { successCount, errors } = await userService.importUsersFromExcel(req.file.buffer);
-    
-    res.json({ 
-      message: `Proceso finalizado. Insertados: ${successCount}. Errores: ${errors.length}`,
-      errors: errors 
-    });
-
-  } catch (error) {
-    console.error("Error en importación de usuarios:", error);
-    res.status(500).json({ error: "Error interno al procesar el archivo." });
-  }
 };

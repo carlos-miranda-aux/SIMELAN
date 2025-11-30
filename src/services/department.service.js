@@ -1,12 +1,15 @@
 // src/services/department.service.js
 import prisma from "../../src/PrismaClient.js"
 
-export const getDepartments = async ({ skip, take }) => { // 👈 Paginado
+export const getDepartments = async ({ skip, take, sortBy, order }) => {
+  // Ordenamiento simple
+  const orderBy = sortBy ? { [sortBy]: order } : { nombre: 'asc' };
+
   const [departments, totalCount] = await prisma.$transaction([
     prisma.department.findMany({
       skip: skip,
       take: take,
-      orderBy: { nombre: 'asc' }
+      orderBy: orderBy // 👈 Usar
     }),
     prisma.department.count()
   ]);

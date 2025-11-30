@@ -2,50 +2,37 @@
 import prisma from "../../src/PrismaClient.js";
 
 // 👈 CORRECCIÓN: 'getMaintenances' ahora acepta 'where'
-export const getMaintenances = async ({ skip, take, where }) => {
-  
+export const getMaintenances = async ({ skip, take, where, sortBy, order }) => {
+  // Ordenamiento dinámico
+  let orderBy = { fecha_programada: 'desc' };
+  if (sortBy) {
+      if (sortBy.includes('.')) {
+          // Soporte para device.nombre_equipo
+          const parts = sortBy.split('.');
+          if(parts.length === 2) orderBy = { [parts[0]]: { [parts[1]]: order } };
+          if(parts.length === 3) orderBy = { [parts[0]]: { [parts[1]]: { [parts[2]]: order } } };
+      } else {
+          orderBy = { [sortBy]: order };
+      }
+  }
+
   const [maintenances, totalCount] = await prisma.$transaction([
     prisma.maintenance.findMany({
-      where: where, // Usa la cláusula 'where' que viene del controlador
+      where: where,
       include: {
-        device: { // Incluir el dispositivo...
-          select: { // ...pero solo los campos necesarios
-            id: true,
-            etiqueta: true,
-            nombre_equipo: true,
-            numero_serie: true,
-            // 👇 NUEVO: Incluir IP
-            ip_equipo: true, // <-- AÑADIDO
-            // 👈 Incluir el usuario del dispositivo
-            usuario: { 
-              select: { 
-                nombre: true, 
-                usuario_login: true // <-- AÑADIDO
-              } 
-            },
-            // 👇 CORRECCIÓN CLAVE: Incluir Área y su Departamento para el reporte de lista
-            area: { 
-              select: { 
-                nombre: true, 
-                departamento: { 
-                  select: { 
-                    nombre: true 
-                  } 
-                } 
-              } 
-            }
+        device: { 
+          select: {
+            id: true, etiqueta: true, nombre_equipo: true, numero_serie: true, ip_equipo: true,
+            usuario: { select: { nombre: true, usuario_login: true } },
+            area: { select: { nombre: true, departamento: { select: { nombre: true } } } }
           }
         }
       },
       skip: skip,
       take: take,
-      orderBy: {
-        fecha_programada: 'desc'
-      }
+      orderBy: orderBy // 👈 Usar dinámico
     }),
-    prisma.maintenance.count({
-      where: where // Usa la misma cláusula 'where' para contar
-    })
+    prisma.maintenance.count({ where: where })
   ]);
 
   return { maintenances, totalCount };

@@ -7,7 +7,7 @@ import ExcelJS from "exceljs";
 // SECCIÓN 1: FUNCIONES CRUD ESTÁNDAR
 // =====================================================================
 
-export const getActiveDevices = async ({ skip, take, search, filter }) => { // 👈 ACEPTA filter
+export const getActiveDevices = async ({ skip, take, search, filter, sortBy, order }) => { 
   const whereClause = {
     estado: { NOT: { nombre: "Baja" } },
   };
@@ -24,7 +24,7 @@ export const getActiveDevices = async ({ skip, take, search, filter }) => { // �
     ];
   }
   
-  // 👇 LÓGICA DE FILTRADO
+  // 👇 LÓGICA DE FILTRADO (Se mantiene igual)
   const today = new Date();
   today.setHours(0, 0, 0, 0); 
   const ninetyDaysFromNow = new Date(today);
@@ -35,33 +35,36 @@ export const getActiveDevices = async ({ skip, take, search, filter }) => { // �
       whereClause.AND = whereClause.AND || [];
       whereClause.AND.push({ es_panda: false });
   } else if (filter === 'warranty-risk') {
-      // Garantías por vencer (90 días)
       whereClause.AND = whereClause.AND || [];
       whereClause.AND.push({
-          garantia_fin: {
-              gte: today.toISOString(), 
-              lte: ninetyDaysFromNow.toISOString() 
-          }
+          garantia_fin: { gte: today.toISOString(), lte: ninetyDaysFromNow.toISOString() }
       });
   } else if (filter === 'expired-warranty') {
-      // Garantías ya vencidas (Fecha Fin < Hoy)
       whereClause.AND = whereClause.AND || [];
-      whereClause.AND.push({
-          garantia_fin: {
-              lt: today.toISOString()
-          }
-      });
+      whereClause.AND.push({ garantia_fin: { lt: today.toISOString() } });
   } else if (filter === 'safe-warranty') {
-      // 👇 NUEVO FILTRO: Garantías vigentes (más de 90 días O sin fecha de fin)
       whereClause.AND = whereClause.AND || [];
       whereClause.AND.push({
           OR: [
-              // Garantía es mayor a 90 días a partir de hoy
               { garantia_fin: { gt: ninetyDaysFromNow.toISOString() } },
-              // No tiene fecha de fin (se considera segura/no aplica)
               { garantia_fin: null }
           ]
       });
+  }
+
+  // 👇 LÓGICA DE ORDENAMIENTO DINÁMICO
+  let orderByClause = {};
+  if (sortBy) {
+      if (sortBy.includes('.')) {
+          // Manejar relaciones (ej: 'tipo.nombre' -> { tipo: { nombre: 'asc' } })
+          const [relation, field] = sortBy.split('.');
+          orderByClause = { [relation]: { [field]: order } };
+      } else {
+          // Campo simple
+          orderByClause = { [sortBy]: order };
+      }
+  } else {
+      orderByClause = { id: 'desc' }; // Default
   }
 
   const [devices, totalCount] = await prisma.$transaction([
@@ -77,13 +80,17 @@ export const getActiveDevices = async ({ skip, take, search, filter }) => { // �
       },
       skip: skip,
       take: take,
-      orderBy: { id: 'desc' }
+      orderBy: orderByClause // 👈 Usamos la cláusula dinámica
     }),
     prisma.device.count({ where: whereClause }),
   ]);
 
   return { devices, totalCount };
 };
+
+// ... (Resto de funciones: createDevice, updateDevice, deleteDevice... se mantienen IGUAL) ...
+// (Para ahorrar espacio, asumo que mantienes el resto del archivo como estaba,
+// ya que solo modificamos `getActiveDevices` y las importaciones)
 
 export const createDevice = (data) => prisma.device.create({ data });
 
@@ -142,8 +149,7 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
     prisma.device.findMany({
       where: whereClause,
       include: {
-        // Aseguramos que todas las relaciones estén incluidas
-        usuario: true, // <-- DEBE SER TRUE para obtener nombre y login
+        usuario: true, 
         tipo: true,
         estado: true,
         sistema_operativo: true,
@@ -159,13 +165,9 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
   return { devices, totalCount };
 };
 
-// FUNCIÓN PARA OBTENER EL CONTEO DE PANDA Y GARANTÍAS VENCIDAS
 export const getPandaStatusCounts = async () => {
-    // Solo contamos los dispositivos activos
     const totalActiveDevices = await prisma.device.count({
-        where: {
-            estado: { NOT: { nombre: "Baja" } }
-        }
+        where: { estado: { NOT: { nombre: "Baja" } } }
     });
 
     const devicesWithPanda = await prisma.device.count({
@@ -175,34 +177,25 @@ export const getPandaStatusCounts = async () => {
         }
     });
 
-    // 👇 CONTEO DE GARANTÍAS VENCIDAS
     const today = new Date();
     today.setHours(0, 0, 0, 0); 
 
     const expiredWarrantiesCount = await prisma.device.count({
         where: {
             estado: { NOT: { nombre: "Baja" } },
-            garantia_fin: {
-                lt: today.toISOString()
-            }
+            garantia_fin: { lt: today.toISOString() }
         }
     });
-    // ---------------------------------
 
-    // Se calcula el conteo de dispositivos sin Panda (críticos)
     const devicesWithoutPanda = totalActiveDevices - devicesWithPanda;
 
     return {
         totalActiveDevices,
         devicesWithPanda,
         devicesWithoutPanda,
-        expiredWarrantiesCount // 👈 EXPONER EL CONTEO
+        expiredWarrantiesCount 
     };
 };
-
-// =====================================================================
-// SECCIÓN 2: IMPORTACIÓN MASIVA INTELIGENTE (omitted for brevity)
-// =====================================================================
 
 export const importDevicesFromExcel = async (buffer) => {
   const workbook = new ExcelJS.Workbook();
@@ -212,7 +205,6 @@ export const importDevicesFromExcel = async (buffer) => {
   const devicesToProcess = [];
   const errors = [];
 
-  // 1. Cargar catálogos base para búsquedas rápidas
   const [areas, users] = await Promise.all([
     prisma.area.findMany({ include: { departamento: true } }),
     prisma.user.findMany(),
@@ -221,61 +213,48 @@ export const importDevicesFromExcel = async (buffer) => {
   const clean = (txt) => txt ? txt.toString().trim() : "";
   const cleanLower = (txt) => clean(txt).toLowerCase();
 
-  // Mapas en memoria
-  // Mapear por usuario_login (Identificador principal para asignación)
   const userLoginMap = new Map(users
-    .filter(i => i.usuario_login) // Solo usuarios que tengan un login definido
+    .filter(i => i.usuario_login) 
     .map(i => [cleanLower(i.usuario_login), i.id])
   );
-  // Mapa secundario para compatibilidad, usando el nombre
   const userNameMap = new Map(users.map(i => [cleanLower(i.nombre), i.id]));
   
   const areaMap = new Map();
   areas.forEach(a => {
-    // Clave compuesta: "nombreArea|nombreDepto"
     areaMap.set(`${cleanLower(a.nombre)}|${cleanLower(a.departamento?.nombre)}`, a.id);
   });
 
-  // 2. Mapear Encabezados Dinámicamente (Fila 1)
   const headerMap = {};
   worksheet.getRow(1).eachCell((cell, colNumber) => {
     headerMap[cleanLower(cell.value)] = colNumber;
   });
   
-  // Helper para convertir cadena de fecha a formato ISO o null
   const parseDateForPrisma = (dateStr) => {
       if (!dateStr) return null;
       try {
           const date = new Date(dateStr);
-          // Si la fecha es válida, la devuelve como ISO string, si no, null
           return isNaN(date.getTime()) ? null : date.toISOString();
       } catch (e) {
           return null;
       }
   };
 
-
-  // 3. Leer Filas y Preparar Datos
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
 
-    // Helper para obtener valor por nombre de columna
     const getVal = (key) => {
       const idx = headerMap[key];
       return idx ? row.getCell(idx).text?.trim() : null;
     };
 
-    // --- Extracción de Datos (con variantes de nombres de columna) ---
     const etiqueta = getVal('etiqueta');
     
     const nombreRaw = getVal('nombre equipo') || getVal('nombre');
     const serieRaw = getVal('n° serie') || getVal('serie') || getVal('numero serie') || getVal('serial');
     
-    // Catálogos
     const tipoStr = getVal('tipo');
     const estadoStr = getVal('estado');
     
-    // Sistema Operativo
     const rawOS = getVal('sistema operativo') || getVal('so') || getVal('os');
     let osStr = null;
     if (rawOS) {
@@ -286,28 +265,21 @@ export const importDevicesFromExcel = async (buffer) => {
     const marca = getVal('marca') || "Genérico";
     const modelo = getVal('modelo') || "Genérico";
     
-    // IP: DHCP si está vacío
     const ip_equipo_raw = getVal('ip') || getVal('ip equipo');
     const ip_equipo = ip_equipo_raw || "DHCP";
     
-    // Descripción: "" si está vacía
     const descripcion = getVal('descripcion') || ""; 
     
-    // Office
     const officeVersionStr = getVal('version office') || getVal('office version') || getVal('version de office') || getVal('office versión');
     const officeLicenseTypeStr = getVal('tipo licencia') || getVal('tipo de licencia') || getVal('licencia office') || getVal('tipo licencia office') || getVal('tipo de licencia office');
     
-    // Garantía
     const garantiaNumProdStr = getVal('n producto') || getVal('garantia numero producto') || getVal('numero de producto de garantia') || getVal('garantia numero');
     const garantiaInicioStr = getVal('inicio garantia') || getVal('garantia inicio');
     const garantiaFinStr = getVal('fin garantia') || getVal('garantia fin');
 
-    // Detección de Panda (El encabezado "Panda" es cubierto por getVal('panda'))
     const pandaStr = getVal('antivirus') || getVal('panda') || getVal('es panda');
     const es_panda = cleanLower(pandaStr) === "si" || cleanLower(pandaStr) === "yes" || cleanLower(pandaStr) === "verdadero" || cleanLower(pandaStr) === "true";
 
-
-    // Asignación de Usuario (prioridad por login)
     const responsableLoginStr = getVal('usuario de login') || getVal('usuario login') || getVal('login') || getVal('usuarios') || getVal('usuario');
     const responsableNameStr = getVal('responsable (jefe') || getVal('responsable');
     
@@ -316,35 +288,28 @@ export const importDevicesFromExcel = async (buffer) => {
     const areaStr = getVal('área') || getVal('area');
     const deptoStr = getVal('departamento');
 
-    // --- Valores por Defecto ---
     const nombre_equipo = nombreRaw || `Equipo Fila ${rowNumber}`;
     const numero_serie = serieRaw || `SN-GEN-${rowNumber}-${Date.now().toString().slice(-4)}`;
 
-    // Resolver IDs existentes
     let usuarioId = null;
     
-    // 1. Intentar por Login (prioridad)
     if (responsableLoginStr) {
         usuarioId = userLoginMap.get(cleanLower(responsableLoginStr));
     }
     
-    // 2. Si no se encuentra, intentar por Nombre (retrocompatibilidad)
     if (!usuarioId && responsableNameStr) {
         usuarioId = userNameMap.get(cleanLower(responsableNameStr));
     }
-
 
     let areaId = null;
     if (areaStr && deptoStr) {
       areaId = areaMap.get(`${cleanLower(areaStr)}|${cleanLower(deptoStr)}`);
     }
-    // Fallback: buscar solo por nombre de área
     if (!areaId && areaStr) {
       const possibleArea = areas.find(a => cleanLower(a.nombre) === cleanLower(areaStr));
       if (possibleArea) areaId = possibleArea.id;
     }
 
-    // Empaquetar para la siguiente fase
     devicesToProcess.push({
       deviceData: {
         etiqueta: etiqueta || null,
@@ -357,14 +322,12 @@ export const importDevicesFromExcel = async (buffer) => {
         perfiles_usuario: perfilesStr || null,
         usuarioId, 
         areaId,
-        // CAMPOS DE OFFICE
         office_version: officeVersionStr || null,
         office_tipo_licencia: officeLicenseTypeStr || null,
-        // CAMPOS DE GARANTÍA
         garantia_numero_producto: garantiaNumProdStr || null,
         garantia_inicio: parseDateForPrisma(garantiaInicioStr),
         garantia_fin: parseDateForPrisma(garantiaFinStr),
-        es_panda: es_panda, // Campo de Panda añadido
+        es_panda: es_panda, 
       },
       meta: {
         tipo: tipoStr || "Estación",
@@ -374,31 +337,24 @@ export const importDevicesFromExcel = async (buffer) => {
     });
   });
 
-  // 4. Procesamiento e Inserción (Creación de Catálogos al Vuelo)
   let successCount = 0;
   
-  // Cachés locales para no consultar la BD repetidamente
   const typesCache = new Map();
   const statusCache = new Map();
   const osCache = new Map();
 
-  // Función auxiliar: Busca o Crea en catálogo
   const getOrCreateCatalog = async (modelName, value, cache) => {
     if (!value) return null;
     const key = cleanLower(value);
     
-    // 1. Buscar en caché local
     if (cache.has(key)) return cache.get(key);
 
-    // 2. Buscar en BD
     let item = await prisma[modelName].findFirst({ where: { nombre: value } });
     
-    // 3. Si no existe, CREAR
     if (!item) {
       try {
         item = await prisma[modelName].create({ data: { nombre: value } });
       } catch (e) {
-        // Si falla (ej. condición de carrera), intentar buscar de nuevo
         item = await prisma[modelName].findFirst({ where: { nombre: value } });
       }
     }
@@ -412,16 +368,10 @@ export const importDevicesFromExcel = async (buffer) => {
 
   for (const item of devicesToProcess) {
     try {
-      // A. Resolver o Crear Tipo
       const tipoId = await getOrCreateCatalog('deviceType', item.meta.tipo, typesCache);
-      
-      // B. Resolver o Crear Estado
       const estadoId = await getOrCreateCatalog('deviceStatus', item.meta.estado, statusCache);
-      
-      // C. Resolver o Crear Sistema Operativo
       const sistemaOperativoId = await getOrCreateCatalog('operatingSystem', item.meta.os, osCache);
 
-      // Construir objeto final
       const finalData = {
         ...item.deviceData,
         tipoId: tipoId, 
@@ -429,7 +379,6 @@ export const importDevicesFromExcel = async (buffer) => {
         sistemaOperativoId: sistemaOperativoId 
       };
 
-      // Upsert (Crear o Actualizar si la serie ya existe)
       const exists = await prisma.device.findUnique({ where: { numero_serie: finalData.numero_serie } });
       
       if (!exists) {
@@ -455,26 +404,24 @@ export const getExpiredWarrantyAnalysis = async (startDate, endDate) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); 
     
-    // 1. Encontrar todos los dispositivos activos cuya garantía haya expirado
     const devices = await prisma.device.findMany({
         where: {
             estado: { NOT: { nombre: "Baja" } },
             garantia_fin: {
-                lt: today.toISOString() // Garantía Final es menor que hoy (expirada)
+                lt: today.toISOString() 
             }
         },
         include: {
             tipo: { select: { nombre: true } },
-            maintenances: { // Incluimos todos los mantenimientos
+            maintenances: { 
                 select: {
                     estado: true,
                     tipo_mantenimiento: true,
                     fecha_realizacion: true,
                 },
                 where: {
-                    estado: 'realizado', // Solo nos interesan los que se realizaron
-                    tipo_mantenimiento: 'Correctivo', // Y que sean correctivos
-                    // Aplicar filtro de fecha SOLO a la fecha de realización
+                    estado: 'realizado', 
+                    tipo_mantenimiento: 'Correctivo', 
                     fecha_realizacion: {
                         ...(startDate && { gte: new Date(startDate).toISOString() }),
                         ...(endDate && { lte: new Date(endDate).toISOString() }),
@@ -486,7 +433,7 @@ export const getExpiredWarrantyAnalysis = async (startDate, endDate) => {
             },
         },
         orderBy: {
-            garantia_fin: 'asc' // Ordenar por la que expiró primero
+            garantia_fin: 'asc' 
         }
     });
 
@@ -499,7 +446,6 @@ export const getExpiredWarrantyAnalysis = async (startDate, endDate) => {
             ? correctives[0].fecha_realizacion 
             : null;
         
-        // Cálculo de días expirados (siempre contra la fecha actual)
         const warrantyEnd = d.garantia_fin ? new Date(d.garantia_fin) : null;
         let daysExpired = null;
         if (warrantyEnd) {
@@ -517,7 +463,6 @@ export const getExpiredWarrantyAnalysis = async (startDate, endDate) => {
             daysExpired: daysExpired,
             correctiveCount: correctives.length,
             lastCorrective: lastCorrectiveDate,
-            // (Total Horas no se calcula en esta versión)
         };
     });
 };

@@ -1,68 +1,72 @@
 // src/services/device.service.js
-
 import prisma from "../../src/PrismaClient.js";
 import ExcelJS from "exceljs";
-import { DEVICE_STATUS, DEFAULTS } from "../config/constants.js"; 
+import { DEVICE_STATUS, DEFAULTS } from "../config/constants.js";
+import * as auditService from "./audit.service.js"; // 👈 IMPORTAR AUDITORÍA
 
 // =====================================================================
 // SECCIÓN 1: FUNCIONES CRUD ESTÁNDAR
 // =====================================================================
 
-export const getActiveDevices = async ({ skip, take, search, filter, sortBy, order }) => { 
+export const getActiveDevices = async ({ skip, take, search, filter, sortBy, order }) => {
   const whereClause = {
     estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
+    deletedAt: null // 👈 Soft Delete
   };
 
   if (search) {
-    whereClause.OR = [
-      { etiqueta: { contains: search } },
-      { nombre_equipo: { contains: search } },
-      { numero_serie: { contains: search } },
-      { marca: { contains: search } },
-      { modelo: { contains: search } },
-      { ip_equipo: { contains: search } },
-      { perfiles_usuario: { contains: search } },
-      { comentarios: { contains: search } },
-    ];
+    whereClause.AND = whereClause.AND || [];
+    whereClause.AND.push({
+      OR: [
+        { etiqueta: { contains: search } },
+        { nombre_equipo: { contains: search } },
+        { numero_serie: { contains: search } },
+        { marca: { contains: search } },
+        { modelo: { contains: search } },
+        { ip_equipo: { contains: search } },
+        { perfiles_usuario: { contains: search } },
+        { comentarios: { contains: search } },
+      ]
+    });
   }
-  
+
   const today = new Date();
-  today.setHours(0, 0, 0, 0); 
+  today.setHours(0, 0, 0, 0);
   const ninetyDaysFromNow = new Date(today);
   ninetyDaysFromNow.setDate(today.getDate() + 90);
-  ninetyDaysFromNow.setHours(23, 59, 59, 999); 
-  
+  ninetyDaysFromNow.setHours(23, 59, 59, 999);
+
   if (filter === 'no-panda') {
-      whereClause.AND = whereClause.AND || [];
-      whereClause.AND.push({ es_panda: false });
+    whereClause.AND = whereClause.AND || [];
+    whereClause.AND.push({ es_panda: false });
   } else if (filter === 'warranty-risk') {
-      whereClause.AND = whereClause.AND || [];
-      whereClause.AND.push({
-          garantia_fin: { gte: today.toISOString(), lte: ninetyDaysFromNow.toISOString() }
-      });
+    whereClause.AND = whereClause.AND || [];
+    whereClause.AND.push({
+      garantia_fin: { gte: today.toISOString(), lte: ninetyDaysFromNow.toISOString() }
+    });
   } else if (filter === 'expired-warranty') {
-      whereClause.AND = whereClause.AND || [];
-      whereClause.AND.push({ garantia_fin: { lt: today.toISOString() } });
+    whereClause.AND = whereClause.AND || [];
+    whereClause.AND.push({ garantia_fin: { lt: today.toISOString() } });
   } else if (filter === 'safe-warranty') {
-      whereClause.AND = whereClause.AND || [];
-      whereClause.AND.push({
-          OR: [
-              { garantia_fin: { gt: ninetyDaysFromNow.toISOString() } },
-              { garantia_fin: null }
-          ]
-      });
+    whereClause.AND = whereClause.AND || [];
+    whereClause.AND.push({
+      OR: [
+        { garantia_fin: { gt: ninetyDaysFromNow.toISOString() } },
+        { garantia_fin: null }
+      ]
+    });
   }
 
   let orderByClause = {};
   if (sortBy) {
-      if (sortBy.includes('.')) {
-          const [relation, field] = sortBy.split('.');
-          orderByClause = { [relation]: { [field]: order } };
-      } else {
-          orderByClause = { [sortBy]: order };
-      }
+    if (sortBy.includes('.')) {
+      const [relation, field] = sortBy.split('.');
+      orderByClause = { [relation]: { [field]: order } };
+    } else {
+      orderByClause = { [sortBy]: order };
+    }
   } else {
-      orderByClause = { id: 'desc' }; 
+    orderByClause = { id: 'desc' };
   }
 
   const [devices, totalCount] = await prisma.$transaction([
@@ -73,12 +77,12 @@ export const getActiveDevices = async ({ skip, take, search, filter, sortBy, ord
         tipo: true,
         estado: true,
         sistema_operativo: true,
-        maintenances: true,
+        maintenances: { where: { deletedAt: null } },
         area: { include: { departamento: true } },
       },
       skip: skip,
       take: take,
-      orderBy: orderByClause 
+      orderBy: orderByClause
     }),
     prisma.device.count({ where: whereClause }),
   ]);
@@ -86,42 +90,94 @@ export const getActiveDevices = async ({ skip, take, search, filter, sortBy, ord
   return { devices, totalCount };
 };
 
-export const createDevice = (data) => prisma.device.create({ data });
+export const createDevice = async (data, user) => {
+  const newDevice = await prisma.device.create({ data });
 
-export const updateDevice = async (id, data) => {
+  // 📝 REGISTRAR AUDITORÍA
+  await auditService.logActivity({
+    action: 'CREATE',
+    entity: 'Device',
+    entityId: newDevice.id,
+    newData: newDevice,
+    user: user,
+    details: `Dispositivo creado: ${newDevice.nombre_equipo}`
+  });
+
+  return newDevice;
+};
+
+export const updateDevice = async (id, data, user) => {
   const deviceId = Number(id);
-  const oldDevice = await prisma.device.findUnique({ where: { id: deviceId } });
+  const oldDevice = await prisma.device.findFirst({
+    where: { id: deviceId, deletedAt: null }
+  });
+
   if (!oldDevice) throw new Error("Dispositivo no encontrado");
 
-  // Buscar el ID del estado "Baja"
+  // Lógica de cambio de estado (Baja/Reactivación)
   const disposedStatus = await prisma.deviceStatus.findFirst({ where: { nombre: DEVICE_STATUS.DISPOSED } });
   const disposedStatusId = disposedStatus?.id;
 
   if (disposedStatusId) {
-    // CASO 1: Reactivación (Estaba de baja y cambia a otro estado)
+    // CASO 1: Reactivación
     if (oldDevice.estadoId === disposedStatusId && data.estadoId && data.estadoId !== disposedStatusId) {
-        // Limpiamos los datos de la baja para que quede limpio
-        data.fecha_baja = null;
-        data.motivo_baja = null;
-        data.observaciones_baja = null;
-    } 
-    // CASO 2: Baja Nueva (No estaba de baja y pasa a baja)
+      data.fecha_baja = null;
+      data.motivo_baja = null;
+      data.observaciones_baja = null;
+    }
+    // CASO 2: Baja Nueva
     else if (data.estadoId === disposedStatusId && oldDevice.estadoId !== disposedStatusId) {
-        data.fecha_baja = new Date();
+      data.fecha_baja = new Date();
     }
   }
 
-  return prisma.device.update({
+  const updatedDevice = await prisma.device.update({
     where: { id: deviceId },
     data,
   });
+
+  // 📝 REGISTRAR AUDITORÍA
+  await auditService.logActivity({
+    action: 'UPDATE',
+    entity: 'Device',
+    entityId: updatedDevice.id,
+    oldData: oldDevice,
+    newData: updatedDevice,
+    user: user,
+    details: `Actualización de equipo: ${updatedDevice.nombre_equipo}`
+  });
+
+  return updatedDevice;
 };
 
-export const deleteDevice = (id) => prisma.device.delete({ where: { id: Number(id) } });
+export const deleteDevice = async (id, user) => {
+  const deviceId = Number(id);
+  const oldDevice = await prisma.device.findFirst({ where: { id: deviceId } });
+
+  const deletedDevice = await prisma.device.update({
+    where: { id: deviceId },
+    data: { deletedAt: new Date() }
+  });
+
+  // 📝 REGISTRAR AUDITORÍA
+  await auditService.logActivity({
+    action: 'DELETE',
+    entity: 'Device',
+    entityId: deviceId,
+    oldData: oldDevice,
+    user: user,
+    details: `Dispositivo eliminado (Soft Delete)`
+  });
+
+  return deletedDevice;
+};
 
 export const getDeviceById = (id) =>
-  prisma.device.findUnique({
-    where: { id: Number(id) },
+  prisma.device.findFirst({
+    where: {
+      id: Number(id),
+      deletedAt: null
+    },
     include: {
       usuario: true,
       tipo: true,
@@ -133,7 +189,10 @@ export const getDeviceById = (id) =>
 
 export const getAllActiveDeviceNames = () =>
   prisma.device.findMany({
-    where: { estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } } },
+    where: {
+      estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
+      deletedAt: null
+    },
     select: {
       id: true,
       etiqueta: true,
@@ -146,6 +205,7 @@ export const getAllActiveDeviceNames = () =>
 export const getInactiveDevices = async ({ skip, take, search }) => {
   const whereClause = {
     estado: { nombre: DEVICE_STATUS.DISPOSED },
+    deletedAt: null
   };
 
   if (search) {
@@ -158,12 +218,12 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
       ]
     };
   }
-  
+
   const [devices, totalCount] = await prisma.$transaction([
     prisma.device.findMany({
       where: whereClause,
       include: {
-        usuario: true, 
+        usuario: true,
         tipo: true,
         estado: true,
         sistema_operativo: true,
@@ -175,125 +235,111 @@ export const getInactiveDevices = async ({ skip, take, search }) => {
     }),
     prisma.device.count({ where: whereClause }),
   ]);
-  
+
   return { devices, totalCount };
 };
 
 export const getPandaStatusCounts = async () => {
-    const totalActiveDevices = await prisma.device.count({
-        where: { estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } } }
-    });
+  const baseWhere = {
+    estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
+    deletedAt: null
+  };
 
-    const devicesWithPanda = await prisma.device.count({
-        where: {
-            estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
-            es_panda: true
-        }
-    });
+  const totalActiveDevices = await prisma.device.count({ where: baseWhere });
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); 
+  const devicesWithPanda = await prisma.device.count({
+    where: { ...baseWhere, es_panda: true }
+  });
 
-    const expiredWarrantiesCount = await prisma.device.count({
-        where: {
-            estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
-            garantia_fin: { lt: today.toISOString() }
-        }
-    });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    const devicesWithoutPanda = totalActiveDevices - devicesWithPanda;
+  const expiredWarrantiesCount = await prisma.device.count({
+    where: { ...baseWhere, garantia_fin: { lt: today.toISOString() } }
+  });
 
-    return {
-        totalActiveDevices,
-        devicesWithPanda,
-        devicesWithoutPanda,
-        expiredWarrantiesCount 
-    };
+  const devicesWithoutPanda = totalActiveDevices - devicesWithPanda;
+
+  return {
+    totalActiveDevices,
+    devicesWithPanda,
+    devicesWithoutPanda,
+    expiredWarrantiesCount
+  };
 };
 
-// 👇 FUNCIÓN OPTIMIZADA PARA DASHBOARD (CORREGIDA)
 export const getDashboardStats = async () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Fecha límite para "Riesgo" (90 días)
-    const ninetyDaysFromNow = new Date(today);
-    ninetyDaysFromNow.setDate(today.getDate() + 90);
-    ninetyDaysFromNow.setHours(23, 59, 59, 999);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    // Fechas para bajas del mes actual
-    const date = new Date();
-    const firstDayMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-    const lastDayMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-    lastDayMonth.setHours(23, 59, 59, 999);
+  const ninetyDaysFromNow = new Date(today);
+  ninetyDaysFromNow.setDate(today.getDate() + 90);
+  ninetyDaysFromNow.setHours(23, 59, 59, 999);
 
-    const activeFilter = { estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } } };
+  const date = new Date();
+  const firstDayMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const lastDayMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  lastDayMonth.setHours(23, 59, 59, 999);
 
-    const [
-        totalActive,
-        withPanda,
-        expiredWarranty,
-        riskWarranty,
-        currentMonthDisposals,
-        warrantyAlerts
-    ] = await prisma.$transaction([
-        // 1. Total Activos
-        prisma.device.count({ where: activeFilter }),
-        
-        // 2. Con Panda (Activos)
-        prisma.device.count({ where: { ...activeFilter, es_panda: true } }),
-        
-        // 3. Garantía Expirada (Activos)
-        prisma.device.count({ where: { ...activeFilter, garantia_fin: { lt: today.toISOString() } } }),
-        
-        // 4. Garantía Riesgo 90 días (Activos)
-        prisma.device.count({ where: { ...activeFilter, garantia_fin: { gte: today.toISOString(), lte: ninetyDaysFromNow.toISOString() } } }),
+  const activeFilter = {
+    estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
+    deletedAt: null
+  };
 
-        // 5. Bajas del mes actual
-        prisma.device.count({ 
-            where: { 
-                estado: { nombre: DEVICE_STATUS.DISPOSED },
-                fecha_baja: { gte: firstDayMonth.toISOString(), lte: lastDayMonth.toISOString() }
-            }
-        }),
+  const [
+    totalActive,
+    withPanda,
+    expiredWarranty,
+    riskWarranty,
+    currentMonthDisposals,
+    warrantyAlerts
+  ] = await prisma.$transaction([
+    prisma.device.count({ where: activeFilter }),
+    prisma.device.count({ where: { ...activeFilter, es_panda: true } }),
+    prisma.device.count({ where: { ...activeFilter, garantia_fin: { lt: today.toISOString() } } }),
+    prisma.device.count({ where: { ...activeFilter, garantia_fin: { gte: today.toISOString(), lte: ninetyDaysFromNow.toISOString() } } }),
+    prisma.device.count({
+      where: {
+        estado: { nombre: DEVICE_STATUS.DISPOSED },
+        fecha_baja: { gte: firstDayMonth.toISOString(), lte: lastDayMonth.toISOString() },
+        deletedAt: null
+      }
+    }),
+    prisma.device.findMany({
+      where: {
+        ...activeFilter,
+        garantia_fin: {
+          gte: today.toISOString(),
+          lte: ninetyDaysFromNow.toISOString()
+        }
+      },
+      select: {
+        id: true,
+        nombre_equipo: true,
+        etiqueta: true,
+        garantia_fin: true
+      },
+      orderBy: { garantia_fin: 'asc' }
+    })
+  ]);
 
-        // 6. Lista de Alertas para la Campana 
-        // CORRECCIÓN: Ahora SOLO trae las que están "En Riesgo" (gte Today), excluyendo las vencidas (lt Today).
-        prisma.device.findMany({
-            where: {
-                ...activeFilter,
-                garantia_fin: { 
-                    gte: today.toISOString(),        // Desde hoy
-                    lte: ninetyDaysFromNow.toISOString() // Hasta 90 días
-                }
-            },
-            select: {
-                id: true,
-                nombre_equipo: true,
-                etiqueta: true,
-                garantia_fin: true
-            },
-            orderBy: { garantia_fin: 'asc' }
-        })
-    ]);
+  const withoutPanda = totalActive - withPanda;
+  const safeWarranty = totalActive - expiredWarranty - riskWarranty;
 
-    const withoutPanda = totalActive - withPanda;
-    const safeWarranty = totalActive - expiredWarranty - riskWarranty;
-
-    return {
-        kpis: {
-            totalActiveDevices: totalActive,
-            devicesWithPanda: withPanda,
-            devicesWithoutPanda: withoutPanda,
-            monthlyDisposals: currentMonthDisposals
-        },
-        warrantyStats: {
-            expired: expiredWarranty,
-            risk: riskWarranty,
-            safe: safeWarranty
-        },
-        warrantyAlertsList: warrantyAlerts // Ahora esta lista viene limpia de expirados
-    };
+  return {
+    kpis: {
+      totalActiveDevices: totalActive,
+      devicesWithPanda: withPanda,
+      devicesWithoutPanda: withoutPanda,
+      monthlyDisposals: currentMonthDisposals
+    },
+    warrantyStats: {
+      expired: expiredWarranty,
+      risk: riskWarranty,
+      safe: safeWarranty
+    },
+    warrantyAlertsList: warrantyAlerts
+  };
 };
 
 // =====================================================================
@@ -304,116 +350,119 @@ const clean = (txt) => txt ? txt.toString().trim() : "";
 const cleanLower = (txt) => clean(txt).toLowerCase();
 
 const parseExcelDate = (dateStr) => {
-    if (!dateStr) return null;
-    try {
-        const date = new Date(dateStr);
-        return isNaN(date.getTime()) ? null : date.toISOString();
-    } catch (e) {
-        return null;
-    }
+  if (!dateStr) return null;
+  try {
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date.toISOString();
+  } catch (e) {
+    return null;
+  }
 };
 
 const getOrCreateCatalog = async (modelName, value, cache) => {
-    if (!value) return null;
-    const key = cleanLower(value);
-    
-    if (cache.has(key)) return cache.get(key);
+  if (!value) return null;
+  const key = cleanLower(value);
 
-    let item = await prisma[modelName].findFirst({ where: { nombre: value } });
-    
-    if (!item) {
-      try {
-        item = await prisma[modelName].create({ data: { nombre: value } });
-      } catch (e) {
-        item = await prisma[modelName].findFirst({ where: { nombre: value } });
-      }
-    }
+  if (cache.has(key)) return cache.get(key);
 
-    if (item) {
-      cache.set(key, item.id);
-      return item.id;
+  let item = await prisma[modelName].findFirst({ where: { nombre: value, deletedAt: null } });
+
+  if (!item) {
+    try {
+      item = await prisma[modelName].create({ data: { nombre: value } });
+    } catch (e) {
+      item = await prisma[modelName].findFirst({ where: { nombre: value } });
     }
-    return null;
+  }
+
+  if (item) {
+    cache.set(key, item.id);
+    return item.id;
+  }
+  return null;
 };
 
 const extractRowData = (row, headerMap) => {
-    const getVal = (key) => {
-        const idx = headerMap[key];
-        return idx ? row.getCell(idx).text?.trim() : null;
-    };
+  const getVal = (key) => {
+    const idx = headerMap[key];
+    return idx ? row.getCell(idx).text?.trim() : null;
+  };
 
-    const rawOS = getVal('sistema operativo') || getVal('so') || getVal('os');
-    const osStr = rawOS ? (rawOS.trim().charAt(0).toUpperCase() + rawOS.trim().slice(1).toLowerCase()) : null;
-    
-    const pandaStr = getVal('antivirus') || getVal('panda') || getVal('es panda');
-    const es_panda = ["si", "yes", "verdadero", "true"].includes(cleanLower(pandaStr));
+  const rawOS = getVal('sistema operativo') || getVal('so') || getVal('os');
+  const osStr = rawOS ? (rawOS.trim().charAt(0).toUpperCase() + rawOS.trim().slice(1).toLowerCase()) : null;
 
-    return {
-        etiqueta: getVal('etiqueta'),
-        nombre_equipo: getVal('nombre equipo') || getVal('nombre'),
-        serie: getVal('n° serie') || getVal('serie') || getVal('numero serie') || getVal('serial'),
-        tipoStr: getVal('tipo') || DEFAULTS.DEVICE_TYPE,
-        estadoStr: getVal('estado') || DEVICE_STATUS.ACTIVE,
-        osStr,
-        marca: getVal('marca') || DEFAULTS.BRAND,
-        modelo: getVal('modelo') || DEFAULTS.MODEL,
-        ip_equipo: getVal('ip') || getVal('ip equipo') || DEFAULTS.IP,
-        descripcion: getVal('descripcion') || "",
-        comentarios: getVal('comentarios') || getVal('observaciones') || getVal('notas'),
-        office_version: getVal('version office') || getVal('office version'),
-        office_licencia: getVal('tipo licencia') || getVal('tipo de licencia'),
-        garantia_num_prod: getVal('n producto') || getVal('garantia numero producto'),
-        garantia_inicio: parseExcelDate(getVal('inicio garantia') || getVal('garantia inicio')),
-        garantia_fin: parseExcelDate(getVal('fin garantia') || getVal('garantia fin')),
-        es_panda,
-        responsableLogin: getVal('usuario de login') || getVal('usuario login') || getVal('login') || getVal('usuarios') || getVal('usuario'),
-        responsableName: getVal('responsable (jefe') || getVal('responsable'),
-        perfiles: getVal('perfiles acceso') || getVal('perfiles') || getVal('perfiles de usuario'),
-        areaStr: getVal('área') || getVal('area'),
-        deptoStr: getVal('departamento')
-    };
+  const pandaStr = getVal('antivirus') || getVal('panda') || getVal('es panda');
+  const es_panda = ["si", "yes", "verdadero", "true"].includes(cleanLower(pandaStr));
+
+  return {
+    etiqueta: getVal('etiqueta'),
+    nombre_equipo: getVal('nombre equipo') || getVal('nombre'),
+    serie: getVal('n° serie') || getVal('serie') || getVal('numero serie') || getVal('serial'),
+    tipoStr: getVal('tipo') || DEFAULTS.DEVICE_TYPE,
+    estadoStr: getVal('estado') || DEVICE_STATUS.ACTIVE,
+    osStr,
+    marca: getVal('marca') || DEFAULTS.BRAND,
+    modelo: getVal('modelo') || DEFAULTS.MODEL,
+    ip_equipo: getVal('ip') || getVal('ip equipo') || DEFAULTS.IP,
+    descripcion: getVal('descripcion') || "",
+    comentarios: getVal('comentarios') || getVal('observaciones') || getVal('notas'),
+    office_version: getVal('version office') || getVal('office version'),
+    office_licencia: getVal('tipo licencia') || getVal('tipo de licencia'),
+    garantia_num_prod: getVal('n producto') || getVal('garantia numero producto'),
+    garantia_inicio: parseExcelDate(getVal('inicio garantia') || getVal('garantia inicio')),
+    garantia_fin: parseExcelDate(getVal('fin garantia') || getVal('garantia fin')),
+    es_panda,
+    responsableLogin: getVal('usuario de login') || getVal('usuario login') || getVal('login') || getVal('usuarios') || getVal('usuario'),
+    responsableName: getVal('responsable (jefe') || getVal('responsable'),
+    perfiles: getVal('perfiles acceso') || getVal('perfiles') || getVal('perfiles de usuario'),
+    areaStr: getVal('área') || getVal('area'),
+    deptoStr: getVal('departamento')
+  };
 };
 
 const resolveForeignKeys = (data, context) => {
-    let usuarioId = null;
-    if (data.responsableLogin) {
-        usuarioId = context.userLoginMap.get(cleanLower(data.responsableLogin));
-    }
-    if (!usuarioId && data.responsableName) {
-        usuarioId = context.userNameMap.get(cleanLower(data.responsableName));
-    }
+  let usuarioId = null;
+  if (data.responsableLogin) {
+    usuarioId = context.userLoginMap.get(cleanLower(data.responsableLogin));
+  }
+  if (!usuarioId && data.responsableName) {
+    usuarioId = context.userNameMap.get(cleanLower(data.responsableName));
+  }
 
-    let areaId = null;
-    if (data.areaStr && data.deptoStr) {
-        areaId = context.areaMap.get(`${cleanLower(data.areaStr)}|${cleanLower(data.deptoStr)}`);
-    }
-    if (!areaId && data.areaStr) {
-        const possibleArea = context.areasList.find(a => cleanLower(a.nombre) === cleanLower(data.areaStr));
-        if (possibleArea) areaId = possibleArea.id;
-    }
+  let areaId = null;
+  if (data.areaStr && data.deptoStr) {
+    areaId = context.areaMap.get(`${cleanLower(data.areaStr)}|${cleanLower(data.deptoStr)}`);
+  }
+  if (!areaId && data.areaStr) {
+    const possibleArea = context.areasList.find(a => cleanLower(a.nombre) === cleanLower(data.areaStr));
+    if (possibleArea) areaId = possibleArea.id;
+  }
 
-    return { usuarioId, areaId };
+  return { usuarioId, areaId };
 };
 
 // =====================================================================
 // SECCIÓN 3: FUNCIÓN PRINCIPAL DE IMPORTACIÓN
 // =====================================================================
 
-export const importDevicesFromExcel = async (buffer) => {
+export const importDevicesFromExcel = async (buffer, user) => {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
   const worksheet = workbook.getWorksheet(1);
 
   const [areas, users] = await Promise.all([
-    prisma.area.findMany({ include: { departamento: true } }),
-    prisma.user.findMany(),
+    prisma.area.findMany({
+      where: { deletedAt: null },
+      include: { departamento: true }
+    }),
+    prisma.user.findMany({ where: { deletedAt: null } }),
   ]);
 
   const context = {
-      userLoginMap: new Map(users.filter(i => i.usuario_login).map(i => [cleanLower(i.usuario_login), i.id])),
-      userNameMap: new Map(users.map(i => [cleanLower(i.nombre), i.id])),
-      areaMap: new Map(areas.map(a => [`${cleanLower(a.nombre)}|${cleanLower(a.departamento?.nombre)}`, a.id])),
-      areasList: areas
+    userLoginMap: new Map(users.filter(i => i.usuario_login).map(i => [cleanLower(i.usuario_login), i.id])),
+    userNameMap: new Map(users.map(i => [cleanLower(i.nombre), i.id])),
+    areaMap: new Map(areas.map(a => [`${cleanLower(a.nombre)}|${cleanLower(a.departamento?.nombre)}`, a.id])),
+    areasList: areas
   };
 
   const headerMap = {};
@@ -422,7 +471,7 @@ export const importDevicesFromExcel = async (buffer) => {
   });
 
   const devicesToProcess = [];
-  
+
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
 
@@ -440,17 +489,17 @@ export const importDevicesFromExcel = async (buffer) => {
         marca: rowData.marca,
         modelo: rowData.modelo,
         ip_equipo: rowData.ip_equipo,
-        descripcion: rowData.descripcion, 
+        descripcion: rowData.descripcion,
         comentarios: rowData.comentarios || null,
         perfiles_usuario: rowData.perfiles || null,
-        usuarioId: foreignKeys.usuarioId, 
+        usuarioId: foreignKeys.usuarioId,
         areaId: foreignKeys.areaId,
         office_version: rowData.office_version || null,
         office_tipo_licencia: rowData.office_licencia || null,
         garantia_numero_producto: rowData.garantia_num_prod || null,
         garantia_inicio: rowData.garantia_inicio,
         garantia_fin: rowData.garantia_fin,
-        es_panda: rowData.es_panda, 
+        es_panda: rowData.es_panda,
       },
       meta: {
         tipo: rowData.tipoStr,
@@ -462,11 +511,11 @@ export const importDevicesFromExcel = async (buffer) => {
 
   let successCount = 0;
   const errors = [];
-  
+
   const caches = {
-      types: new Map(),
-      status: new Map(),
-      os: new Map()
+    types: new Map(),
+    status: new Map(),
+    os: new Map()
   };
 
   for (const item of devicesToProcess) {
@@ -477,19 +526,22 @@ export const importDevicesFromExcel = async (buffer) => {
 
       const finalData = {
         ...item.deviceData,
-        tipoId, 
+        tipoId,
         estadoId,
-        sistemaOperativoId 
+        sistemaOperativoId
       };
 
       const exists = await prisma.device.findUnique({ where: { numero_serie: finalData.numero_serie } });
-      
+
       if (!exists) {
         await prisma.device.create({ data: finalData });
       } else {
         await prisma.device.update({
           where: { id: exists.id },
-          data: finalData
+          data: {
+            ...finalData,
+            deletedAt: null
+          }
         });
       }
       successCount++;
@@ -499,72 +551,85 @@ export const importDevicesFromExcel = async (buffer) => {
     }
   }
 
+  // 📝 REGISTRAR AUDITORÍA MASIVA
+  if (successCount > 0) {
+    await auditService.logActivity({
+      action: 'IMPORT',
+      entity: 'Device',
+      entityId: 0,
+      details: `Importación masiva: ${successCount} equipos procesados.`,
+      user: user
+    });
+  }
+
   return { successCount, errors };
 };
 
 export const getExpiredWarrantyAnalysis = async (startDate, endDate) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); 
-    
-    const devices = await prisma.device.findMany({
-        where: {
-            estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
-            garantia_fin: {
-                lt: today.toISOString() 
-            }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const devices = await prisma.device.findMany({
+    where: {
+      estado: { NOT: { nombre: DEVICE_STATUS.DISPOSED } },
+      deletedAt: null,
+      garantia_fin: {
+        lt: today.toISOString()
+      }
+    },
+    include: {
+      tipo: { select: { nombre: true } },
+      maintenances: {
+        select: {
+          estado: true,
+          tipo_mantenimiento: true,
+          fecha_realizacion: true,
         },
-        include: {
-            tipo: { select: { nombre: true } },
-            maintenances: { 
-                select: {
-                    estado: true,
-                    tipo_mantenimiento: true,
-                    fecha_realizacion: true,
-                },
-                where: {
-                    estado: 'realizado', 
-                    tipo_mantenimiento: 'Correctivo', 
-                    fecha_realizacion: {
-                        ...(startDate && { gte: new Date(startDate).toISOString() }),
-                        ...(endDate && { lte: new Date(endDate).toISOString() }),
-                    }
-                },
-                orderBy: {
-                    fecha_realizacion: 'desc'
-                }
-            },
+        where: {
+          estado: 'realizado',
+          tipo_mantenimiento: 'Correctivo',
+          deletedAt: null,
+          fecha_realizacion: {
+            ...(startDate && { gte: new Date(startDate).toISOString() }),
+            ...(endDate && { lte: new Date(endDate).toISOString() }),
+          }
         },
         orderBy: {
-            garantia_fin: 'asc' 
+          fecha_realizacion: 'desc'
         }
-    });
+      },
+    },
+    orderBy: {
+      garantia_fin: 'asc'
+    }
+  });
 
-    return devices.map(d => {
-        const correctives = d.maintenances.filter(m => 
-             m.tipo_mantenimiento === 'Correctivo' && m.estado === 'realizado'
-        );
-        
-        const lastCorrectiveDate = correctives.length > 0 
-            ? correctives[0].fecha_realizacion 
-            : null;
-        
-        const warrantyEnd = d.garantia_fin ? new Date(d.garantia_fin) : null;
-        let daysExpired = null;
-        if (warrantyEnd) {
-            const diffTime = today.getTime() - warrantyEnd.getTime();
-            daysExpired = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        }
+  return devices.map(d => {
+    const correctives = d.maintenances.filter(m =>
+      m.tipo_mantenimiento === 'Correctivo' && m.estado === 'realizado'
+    );
 
-        return {
-            etiqueta: d.etiqueta || "N/A",
-            nombre_equipo: d.nombre_equipo || "N/A",
-            numero_serie: d.numero_serie || "N/A",
-            marca: d.marca || "N/A",
-            modelo: d.modelo || "N/A",
-            garantia_fin: warrantyEnd,
-            daysExpired: daysExpired,
-            correctiveCount: correctives.length,
-            lastCorrective: lastCorrectiveDate,
-        };
-    });
+    const lastCorrectiveDate = correctives.length > 0
+      ? correctives[0].fecha_realizacion
+      : null;
+
+    const warrantyEnd = d.garantia_fin ? new Date(d.garantia_fin) : null;
+    let daysExpired = null;
+    if (warrantyEnd) {
+      const diffTime = today.getTime() - warrantyEnd.getTime();
+      daysExpired = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    return {
+      etiqueta: d.etiqueta || "N/A",
+      nombre_equipo: d.nombre_equipo || "N/A",
+      numero_serie: d.numero_serie || "N/A",
+      marca: d.marca || "N/A",
+      modelo: d.modelo || "N/A",
+      garantia_fin: warrantyEnd,
+      daysExpired: daysExpired,
+      correctiveCount: correctives.length,
+      lastCorrective: lastCorrectiveDate,
+    };
+  });
 };

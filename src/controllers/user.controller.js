@@ -5,7 +5,6 @@ import ExcelJS from "exceljs";
 export const getUsers = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    // Si limit viene como '0', lo tratamos como 0 numérico para el if, sino default 10
     const limitParam = req.query.limit; 
     const limit = (limitParam === '0') ? 0 : (parseInt(limitParam) || 10);
     
@@ -14,7 +13,6 @@ export const getUsers = async (req, res, next) => {
     
     const skip = (page - 1) * limit;
 
-    // Si el límite es 0, devolvemos TODOS los usuarios en formato Array simple
     if (limit === 0) {
         const { users } = await userService.getUsers({ 
             skip: 0, 
@@ -25,7 +23,6 @@ export const getUsers = async (req, res, next) => {
         return res.json(users);
     }
 
-    // Respuesta Paginada (Objeto)
     const { users, totalCount } = await userService.getUsers({ skip, take: limit, search: req.query.search, sortBy, order });
 
     res.json({
@@ -60,7 +57,8 @@ export const getUser = async (req, res, next) => {
 
 export const createUser = async (req, res, next) => {
   try {
-    const user = await userService.createUser(req.body);
+    // 👈 PASAMOS req.user
+    const user = await userService.createUser(req.body, req.user);
     res.status(201).json(user);
   } catch (error) {
     next(error);
@@ -69,7 +67,8 @@ export const createUser = async (req, res, next) => {
 
 export const updateUser = async (req, res, next) => {
   try {
-    const user = await userService.updateUser(req.params.id, req.body);
+    // 👈 PASAMOS req.user
+    const user = await userService.updateUser(req.params.id, req.body, req.user);
     res.json(user);
   } catch (error) {
     next(error);
@@ -78,12 +77,14 @@ export const updateUser = async (req, res, next) => {
 
 export const deleteUser = async (req, res, next) => {
   try {
-    await userService.deleteUser(req.params.id);
+    // 👈 PASAMOS req.user
+    await userService.deleteUser(req.params.id, req.user);
     res.json({ message: "User deleted" });
   } catch (error) {
     next(error);
   }
 };
+
 export const exportUsers = async (req, res, next) => {
   try {
     const { users } = await userService.getUsers({ skip: 0, take: undefined }); 
@@ -112,10 +113,8 @@ export const exportUsers = async (req, res, next) => {
     });
 
     worksheet.getRow(1).font = { bold: true };
-    
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", "attachment; filename=usuarios_crown.xlsx");
-    
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
@@ -126,7 +125,7 @@ export const exportUsers = async (req, res, next) => {
 export const importUsers = async (req, res, next) => {
     try {
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-      const result = await userService.importUsersFromExcel(req.file.buffer);
+      const result = await userService.importUsersFromExcel(req.file.buffer, req.user);
       res.json(result);
     } catch (error) {
       next(error);

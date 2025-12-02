@@ -1,3 +1,4 @@
+// src/index.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -9,7 +10,7 @@ import { preloadMasterData } from "./utils/preloadData.js";
 
 // Importar rutas
 import departmentRoutes from "./routes/department.routes.js";
-import areaRoutes from "./routes/area.routes.js"; // 👈 NUEVA RUTA
+import areaRoutes from "./routes/area.routes.js"; 
 import osRoutes from "./routes/operatingSystem.routes.js";
 import deviceTypeRoutes from "./routes/deviceType.routes.js";
 import deviceStatusRoutes from "./routes/deviceStatus.routes.js";
@@ -18,6 +19,7 @@ import devicesRoutes from "./routes/devices.routes.js";
 import maintenanceRoutes from "./routes/maintenance.routes.js";
 import disposalRoutes from "./routes/disposal.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import auditRoutes from "./routes/audit.routes.js"; // 👈 NUEVA RUTA IMPORTADA
 
 import { errorHandler } from "./middlewares/errorHandler.js";
 
@@ -29,7 +31,7 @@ app.use(express.json());
 
 // rutas
 app.use("/api/departments", departmentRoutes);
-app.use("/api/areas", areaRoutes); // 👈 USAR RUTA
+app.use("/api/areas", areaRoutes); 
 app.use("/api/operating-systems", osRoutes);
 app.use("/api/device-types", deviceTypeRoutes);
 app.use("/api/device-status", deviceStatusRoutes);
@@ -38,6 +40,7 @@ app.use("/api/devices", devicesRoutes);
 app.use("/api/maintenances", maintenanceRoutes);
 app.use("/api/disposals", disposalRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/audit", auditRoutes); // 👈 CONECTAR RUTA
 
 app.use(errorHandler);
 
@@ -76,7 +79,6 @@ app.listen(PORT, async () => {
   // --- TAREA PROGRAMADA (CRON) ---
   console.log("Tarea programada de recordatorios configurada (9:00 AM).");
   
-  //cron.schedule('* * * * *', async () => {
   cron.schedule('0 9 * * *', async () => {
     console.log('Ejecutando tarea programada (9:00 AM)...');
     try {
@@ -92,6 +94,7 @@ app.listen(PORT, async () => {
       const maintenances = await prisma.maintenance.findMany({
         where: {
           estado: 'pendiente',
+          deletedAt: null, // 👈 IMPORTANTE: Respetar Soft Delete en CRON también
           OR: [
             { fecha_programada: { gte: fiveDaysFromNow, lt: new Date(fiveDaysFromNow.getTime() + 24 * 60 * 60 * 1000) } },
             { fecha_programada: { gte: oneDayFromNow, lt: new Date(oneDayFromNow.getTime() + 24 * 60 * 60 * 1000) } }
@@ -101,7 +104,7 @@ app.listen(PORT, async () => {
           device: { 
             include: {
               usuario: true,
-              area: true, // 👈 Incluimos el ÁREA
+              area: true, 
               tipo: true,
             }
           }
@@ -112,16 +115,13 @@ app.listen(PORT, async () => {
 
       for (const maint of maintenances) {
         const device = maint.device;
-        // Validamos que el dispositivo tenga un área asignada
-        if (!device || !device.areaId) {
-          continue;
-        }
+        if (!device || !device.areaId) continue;
 
-        // 👈 BÚSQUEDA ACTUALIZADA: Buscamos al jefe de ESTA ÁREA
         const manager = await prisma.user.findFirst({
           where: {
-            areaId: device.areaId, // Coincide con el área del equipo
+            areaId: device.areaId,
             es_jefe_de_area: true,
+            deletedAt: null // 👈 No notificar a jefes borrados
           }
         });
 

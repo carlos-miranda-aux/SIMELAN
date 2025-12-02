@@ -1,3 +1,4 @@
+// src/controllers/auth.controller.js
 import * as authService from "../services/auth.service.js";
 import prisma from "../PrismaClient.js";
 import ExcelJS from "exceljs";
@@ -8,9 +9,6 @@ export const login = async (req, res, next) => {
     const data = await authService.loginUser({ identifier, password });
     res.json(data);
   } catch (err) {
-    // Aquí podrías querer mantener el 400 explícito si el errorHandler no maneja "Usuario no encontrado"
-    // Pero para ser consistentes con el patrón, lo pasamos:
-    // (Asegúrate de que tu errorHandler maneje errores de login si quieres mensajes personalizados)
     res.status(400).json({ message: err.message }); 
   }
 };
@@ -56,7 +54,9 @@ export const deleteUser = async (req, res, next) => {
     const userToDelete = await prisma.userSistema.findUnique({ where: { id: Number(req.params.id) } });
     if (!userToDelete) return res.status(404).json({ message: "Usuario no encontrado" });
     if (userToDelete.username === "superadmin") return res.status(403).json({ error: "No se puede eliminar al superadmin" });
-    await authService.deleteUser(req.params.id);
+    
+    // 👈 PASAMOS req.user
+    await authService.deleteUser(req.params.id, req.user);
     res.json({ message: "Usuario eliminado" });
   } catch (error) { 
     next(error); 
@@ -65,7 +65,8 @@ export const deleteUser = async (req, res, next) => {
 
 export const updateUserController = async (req, res, next) => {
   try {
-    const updatedUser = await authService.updateUser(req.params.id, req.body);
+    // 👈 PASAMOS req.user
+    const updatedUser = await authService.updateUser(req.params.id, req.body, req.user);
     res.json({ message: "Usuario actualizado", user: updatedUser });
   } catch (error) { 
     next(error); 
@@ -74,7 +75,8 @@ export const updateUserController = async (req, res, next) => {
 
 export const createUser = async (req, res, next) => {
   try {
-    const user = await authService.registerUser(req.body);
+    // 👈 PASAMOS req.user (aunque sea un registro nuevo, quien lo crea es el admin logueado)
+    const user = await authService.registerUser(req.body, req.user);
     res.status(201).json(user);
   } catch (error) { 
     next(error); 

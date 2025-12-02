@@ -43,7 +43,7 @@ export const getDeviceStatus = async (req, res, next) => {
 
 export const createDeviceStatus = async (req, res, next) => {
   try {
-    const status = await deviceStatusService.createDeviceStatus(req.body);
+    const status = await deviceStatusService.createDeviceStatus(req.body, req.user); // 👈 req.user
     res.status(201).json(status);
   } catch (error) { 
     next(error); 
@@ -54,7 +54,7 @@ export const updateDeviceStatus = async (req, res, next) => {
   try {
     const oldStatus = await deviceStatusService.getDeviceStatusById(req.params.id);
     if (!oldStatus) return res.status(404).json({ message: "Status not found" });
-    const status = await deviceStatusService.updateDeviceStatus(req.params.id, req.body);
+    const status = await deviceStatusService.updateDeviceStatus(req.params.id, req.body, req.user); // 👈 req.user
     res.json(status);
   } catch (error) { 
     next(error); 
@@ -65,7 +65,7 @@ export const deleteDeviceStatus = async (req, res, next) => {
   try {
     const oldStatus = await deviceStatusService.getDeviceStatusById(req.params.id);
     if (!oldStatus) return res.status(404).json({ message: "Status not found" });
-    await deviceStatusService.deleteDeviceStatus(req.params.id);
+    await deviceStatusService.deleteDeviceStatus(req.params.id, req.user); // 👈 req.user
     res.json({ message: "Status deleted" });
   } catch (error) {
     next(error);

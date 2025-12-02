@@ -33,7 +33,7 @@ export const getDepartment = async (req, res, next) => {
 
 export const createDepartment = async (req, res, next) => {
   try {
-    const department = await departmentService.createDepartment(req.body);
+    const department = await departmentService.createDepartment(req.body, req.user); // 👈 req.user
     res.status(201).json(department);
   } catch (error) {
     next(error);
@@ -44,7 +44,7 @@ export const updateDepartment = async (req, res, next) => {
   try {
     const oldDept = await departmentService.getDepartmentById(req.params.id);
     if (!oldDept) return res.status(404).json({ message: "Department not found" });
-    const department = await departmentService.updateDepartment(req.params.id, req.body);
+    const department = await departmentService.updateDepartment(req.params.id, req.body, req.user); // 👈 req.user
     res.json(department);
   } catch (error) {
     next(error);
@@ -55,7 +55,7 @@ export const deleteDepartment = async (req, res, next) => {
   try {
     const oldDept = await departmentService.getDepartmentById(req.params.id);
     if (!oldDept) return res.status(404).json({ message: "Department not found" });
-    await departmentService.deleteDepartment(req.params.id);
+    await departmentService.deleteDepartment(req.params.id, req.user); // 👈 req.user
     res.json({ message: "Department deleted" });
   } catch (error) {
     next(error);

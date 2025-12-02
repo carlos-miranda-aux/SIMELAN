@@ -64,7 +64,6 @@ export const getPandaStatus = async (req, res, next) => {
     }
 };
 
-// 👇 CONTROLADOR PARA DASHBOARD
 export const getDashboardData = async (req, res, next) => {
     try {
         const stats = await deviceService.getDashboardStats();
@@ -97,7 +96,8 @@ export const createDevice = async (req, res, next) => {
         observaciones_baja: null 
       };
 
-      const newDevice = await deviceService.createDevice(dataToCreate);
+      // 👈 PASAMOS req.user
+      const newDevice = await deviceService.createDevice(dataToCreate, req.user);
       
       if (fecha_proxima_revision) {
         await prisma.maintenance.create({
@@ -139,7 +139,8 @@ export const updateDevice = async (req, res, next) => {
       if (dataToUpdate.garantia_numero_reporte === "") dataToUpdate.garantia_numero_reporte = null;
       if (dataToUpdate.garantia_notes === "") dataToUpdate.garantia_notes = null;
       
-      const updatedDevice = await deviceService.updateDevice(deviceId, dataToUpdate);
+      // 👈 PASAMOS req.user
+      const updatedDevice = await deviceService.updateDevice(deviceId, dataToUpdate, req.user);
       res.json(updatedDevice);
 
     } catch (error) {
@@ -152,7 +153,8 @@ export const deleteDevice = async (req, res, next) => {
       const oldDevice = await deviceService.getDeviceById(req.params.id);
       if (!oldDevice) return res.status(404).json({ error: "Dispositivo no encontrado" });
   
-      await deviceService.deleteDevice(req.params.id);
+      // 👈 PASAMOS req.user
+      await deviceService.deleteDevice(req.params.id, req.user);
       
       res.json({ message: "Dispositivo eliminado" });
     } catch (error) {
@@ -288,7 +290,8 @@ export const importDevices = async (req, res, next) => {
         return res.status(400).json({ error: "No se ha subido ningún archivo." });
       }
       
-      const { successCount, errors } = await deviceService.importDevicesFromExcel(req.file.buffer);
+      // La importación masiva podría también recibir req.user si quieres auditar la importación
+      const { successCount, errors } = await deviceService.importDevicesFromExcel(req.file.buffer, req.user);
       
       res.json({ 
         message: `Importación finalizada. Insertados: ${successCount}. Errores: ${errors.length}`,

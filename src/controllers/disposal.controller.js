@@ -42,7 +42,8 @@ export const updateDisposal = async (req, res, next) => {
       observaciones_baja: req.body.observaciones_baja
     };
 
-    const disposal = await deviceService.updateDevice(req.params.id, dataToUpdate);
+    // 👈 PASAMOS req.user
+    const disposal = await deviceService.updateDevice(req.params.id, dataToUpdate, req.user);
     res.json(disposal);
   } catch (error) {
     next(error);
@@ -104,4 +105,4 @@ export const exportDisposalsExcel = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};  
+};

@@ -1,7 +1,7 @@
 // src/controllers/maintenance.controller.js
 import * as maintenanceService from "../services/maintenance.service.js";
 import ExcelJS from "exceljs";
-import { MAINTENANCE_STATUS } from "../config/constants.js"; // 👈 CONSTANTE
+import { MAINTENANCE_STATUS } from "../config/constants.js"; 
 
 export const getMaintenances = async (req, res, next) => {
   try {
@@ -15,7 +15,6 @@ export const getMaintenances = async (req, res, next) => {
     const skip = (page - 1) * limit;
     const whereClause = {};
     
-    // 👇 USO DE CONSTANTES
     if (statusFilter === MAINTENANCE_STATUS.PENDING) {
         whereClause.estado = MAINTENANCE_STATUS.PENDING;
     } else if (statusFilter === 'historial') {
@@ -58,7 +57,8 @@ export const getMaintenance = async (req, res, next) => {
 
 export const createMaintenance = async (req, res, next) => {
   try {
-    const newMaintenance = await maintenanceService.createMaintenance(req.body);
+    // 👈 PASAMOS req.user
+    const newMaintenance = await maintenanceService.createMaintenance(req.body, req.user);
     res.status(201).json(newMaintenance);
   } catch (error) {
     next(error);
@@ -72,7 +72,6 @@ export const updateMaintenance = async (req, res, next) => {
 
     let dataToUpdate = { ...req.body };
 
-    // 👇 USO DE CONSTANTE
     if (dataToUpdate.estado === MAINTENANCE_STATUS.PENDING) {
       dataToUpdate.diagnostico = null;
       dataToUpdate.acciones_realizadas = null;
@@ -80,25 +79,25 @@ export const updateMaintenance = async (req, res, next) => {
       dataToUpdate.fecha_realizacion = null;
     }
 
-    const updatedMaintenance = await maintenanceService.updateMaintenance(req.params.id, dataToUpdate);
+    // 👈 PASAMOS req.user
+    const updatedMaintenance = await maintenanceService.updateMaintenance(req.params.id, dataToUpdate, req.user);
     res.json(updatedMaintenance);
   } catch (error) {
     next(error);
   }
 };
 
-
 export const deleteMaintenance = async (req, res, next) => {
   try {
     const oldMaintenance = await maintenanceService.getMaintenanceById(req.params.id);
     if (!oldMaintenance) return res.status(404).json({ message: "Maintenance not found" });
 
-    // 👇 USO DE CONSTANTES
     if (oldMaintenance.estado === MAINTENANCE_STATUS.COMPLETED || oldMaintenance.estado === MAINTENANCE_STATUS.CANCELLED) {
       return res.status(403).json({ message: "No se puede eliminar un mantenimiento que ya forma parte del historial." });
     }
 
-    await maintenanceService.deleteMaintenance(req.params.id);
+    // 👈 PASAMOS req.user
+    await maintenanceService.deleteMaintenance(req.params.id, req.user);
     res.json({ message: "Maintenance deleted" });
   } catch (error) {
     next(error);
@@ -180,6 +179,7 @@ export const exportIndividualMaintenance = async (req, res, next) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Formato de Servicio");
 
+    // (Lógica de exportación individual se mantiene igual...)
     worksheet.mergeCells('A1:D1');
     const titleCell = worksheet.getCell('A1');
     titleCell.value = `Formato de Servicio - Manto #${maintenance.id}`;

@@ -43,7 +43,7 @@ export const getDeviceType = async (req, res, next) => {
 
 export const createDeviceType = async (req, res, next) => {
   try {
-    const type = await deviceTypeService.createDeviceType(req.body);
+    const type = await deviceTypeService.createDeviceType(req.body, req.user); // 👈 req.user
     res.status(201).json(type);
   } catch (error) { 
     next(error); 
@@ -54,7 +54,7 @@ export const updateDeviceType = async (req, res, next) => {
   try {
     const oldType = await deviceTypeService.getDeviceTypeById(req.params.id);
     if (!oldType) return res.status(404).json({ message: "Type not found" });
-    const type = await deviceTypeService.updateDeviceType(req.params.id, req.body);
+    const type = await deviceTypeService.updateDeviceType(req.params.id, req.body, req.user); // 👈 req.user
     res.json(type);
   } catch (error) { 
     next(error); 
@@ -65,7 +65,7 @@ export const deleteDeviceType = async (req, res, next) => {
   try {
     const oldType = await deviceTypeService.getDeviceTypeById(req.params.id);
     if (!oldType) return res.status(404).json({ message: "Type not found" });
-    await deviceTypeService.deleteDeviceType(req.params.id);
+    await deviceTypeService.deleteDeviceType(req.params.id, req.user); // 👈 req.user
     res.json({ message: "Type deleted" });
   } catch (error) {
     next(error);

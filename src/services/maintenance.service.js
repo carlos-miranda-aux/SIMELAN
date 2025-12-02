@@ -1,26 +1,29 @@
 // src/services/maintenance.service.js
 import prisma from "../../src/PrismaClient.js";
+import * as auditService from "./audit.service.js"; // 👈 IMPORTAR
 
-// 👈 CORRECCIÓN: 'getMaintenances' ahora acepta 'where'
 export const getMaintenances = async ({ skip, take, where, sortBy, order }) => {
-  // Ordenamiento dinámico
+  const finalWhere = {
+    ...where,
+    deletedAt: null
+  };
+
   let orderBy = { fecha_programada: 'desc' };
   if (sortBy) {
-      if (sortBy.includes('.')) {
-          // Soporte para device.nombre_equipo
-          const parts = sortBy.split('.');
-          if(parts.length === 2) orderBy = { [parts[0]]: { [parts[1]]: order } };
-          if(parts.length === 3) orderBy = { [parts[0]]: { [parts[1]]: { [parts[2]]: order } } };
-      } else {
-          orderBy = { [sortBy]: order };
-      }
+    if (sortBy.includes('.')) {
+      const parts = sortBy.split('.');
+      if (parts.length === 2) orderBy = { [parts[0]]: { [parts[1]]: order } };
+      if (parts.length === 3) orderBy = { [parts[0]]: { [parts[1]]: { [parts[2]]: order } } };
+    } else {
+      orderBy = { [sortBy]: order };
+    }
   }
 
   const [maintenances, totalCount] = await prisma.$transaction([
     prisma.maintenance.findMany({
-      where: where,
+      where: finalWhere,
       include: {
-        device: { 
+        device: {
           select: {
             id: true, etiqueta: true, nombre_equipo: true, numero_serie: true, ip_equipo: true,
             usuario: { select: { nombre: true, usuario_login: true } },
@@ -30,25 +33,27 @@ export const getMaintenances = async ({ skip, take, where, sortBy, order }) => {
       },
       skip: skip,
       take: take,
-      orderBy: orderBy // 👈 Usar dinámico
+      orderBy: orderBy
     }),
-    prisma.maintenance.count({ where: where })
+    prisma.maintenance.count({ where: finalWhere })
   ]);
 
   return { maintenances, totalCount };
 };
-// --- El resto de funciones (sin cambios) ---
 
 export const getMaintenanceById = (id) =>
-  prisma.maintenance.findUnique({
-    where: { id: Number(id) },
+  prisma.maintenance.findFirst({
+    where: {
+      id: Number(id),
+      deletedAt: null
+    },
     include: {
-      device: { // La relación es Device -> Area -> Departamento
+      device: {
         include: {
           usuario: true,
-          area: { // Usar la relación 'area'
+          area: {
             include: {
-              departamento: true // Y luego incluir el departamento
+              departamento: true
             }
           },
           tipo: true,
@@ -57,16 +62,68 @@ export const getMaintenanceById = (id) =>
     },
   });
 
-export const createMaintenance = (data) =>
-  prisma.maintenance.create({ data });
+export const createMaintenance = async (data, user) => {
+  const newManto = await prisma.maintenance.create({ data });
 
-export const updateMaintenance = (id, data) =>
-  prisma.maintenance.update({
-    where: { id: Number(id) },
+  // 📝 REGISTRAR
+  await auditService.logActivity({
+    action: 'CREATE',
+    entity: 'Maintenance',
+    entityId: newManto.id,
+    newData: newManto,
+    user: user,
+    details: `Mantenimiento programado para equipo ID: ${newManto.deviceId}`
+  });
+
+  return newManto;
+};
+
+export const updateMaintenance = async (id, data, user) => {
+  const mantoId = Number(id);
+  const oldManto = await prisma.maintenance.findFirst({ where: { id: mantoId } });
+
+  const updatedManto = await prisma.maintenance.update({
+    where: { id: mantoId },
     data,
   });
 
-export const deleteMaintenance = (id) =>
-  prisma.maintenance.delete({
-    where: { id: Number(id) },
+  let details = "Actualización de mantenimiento";
+  if (oldManto.estado !== 'realizado' && updatedManto.estado === 'realizado') {
+    details = "Mantenimiento COMPLETADO";
+  }
+
+  // 📝 REGISTRAR
+  await auditService.logActivity({
+    action: 'UPDATE',
+    entity: 'Maintenance',
+    entityId: mantoId,
+    oldData: oldManto,
+    newData: updatedManto,
+    user: user,
+    details: details
   });
+
+  return updatedManto;
+};
+
+export const deleteMaintenance = async (id, user) => {
+  const mantoId = Number(id);
+  const oldManto = await prisma.maintenance.findFirst({ where: { id: mantoId } });
+
+  const deleted = await prisma.maintenance.update({
+    where: { id: mantoId },
+    data: { deletedAt: new Date() }
+  });
+
+  // 📝 REGISTRAR
+  await auditService.logActivity({
+    action: 'DELETE',
+    entity: 'Maintenance',
+    entityId: mantoId,
+    oldData: oldManto,
+    user: user,
+    details: "Mantenimiento eliminado"
+  });
+
+  return deleted;
+};

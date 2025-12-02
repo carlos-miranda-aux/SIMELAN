@@ -9,120 +9,107 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// 1. DEPARTAMENTO (Ej. Contraloría, División Cuartos)
+// 1. DEPARTAMENTO
 model Department {
-  id     Int    @id @default(autoincrement())
-  nombre String @unique
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  deletedAt DateTime? // 👈 Soft Delete
 
-  areas Area[] // Un departamento tiene muchas áreas
+  areas Area[]
 }
 
-// 2. AREA (NUEVA TABLA: Ej. Sistemas, Recepción, Concierge)
+// 2. AREA
 model Area {
   id             Int        @id @default(autoincrement())
   nombre         String
   departamento   Department @relation(fields: [departamentoId], references: [id])
   departamentoId Int
+  deletedAt      DateTime? // 👈 Soft Delete
 
-  users   User[] // Un área tiene muchos empleados
-  devices Device[] // Un área tiene muchos equipos
+  users   User[]
+  devices Device[]
 
-  @@unique([nombre, departamentoId]) // No puede haber dos áreas con el mismo nombre en el mismo depto
+  @@unique([nombre, departamentoId])
 }
 
 model OperatingSystem {
-  id      Int      @id @default(autoincrement())
-  nombre  String   @unique
-  devices Device[]
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  deletedAt DateTime? // 👈 Soft Delete
+  devices   Device[]
 }
 
 model DeviceType {
-  id      Int      @id @default(autoincrement())
-  nombre  String   @unique
-  devices Device[]
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  deletedAt DateTime? // 👈 Soft Delete
+  devices   Device[]
 }
 
 model DeviceStatus {
-  id      Int      @id @default(autoincrement())
-  nombre  String   @unique
-  devices Device[]
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  deletedAt DateTime? // 👈 Soft Delete
+  devices   Device[]
 }
 
 model User {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   nombre          String
   correo          String?
-  
-  // Cambio: Ahora se relaciona con AREA, no directo con Departamento
-  area            Area?    @relation(fields: [areaId], references: [id])
+  area            Area?     @relation(fields: [areaId], references: [id])
   areaId          Int?
-
   usuario_login   String?
-  created_at      DateTime @default(now())
-  
-  // Ahora "Jefe de Área" significa que es responsable de su Area asignada
-  es_jefe_de_area Boolean  @default(false)
-  
-  devices         Device[]
+  created_at      DateTime  @default(now())
+  es_jefe_de_area Boolean   @default(false)
+  deletedAt       DateTime? // 👈 Soft Delete
+
+  devices Device[]
 
   @@index([areaId])
 }
 
 model Device {
   id                       Int       @id @default(autoincrement())
-  etiqueta                 String?   
-  nombre_equipo            String 
+  etiqueta                 String?
+  nombre_equipo            String
   descripcion              String?
-
   comentarios              String?   @db.Text
-
   ip_equipo                String?
   perfiles_usuario         String?
-  
   usuario                  User?     @relation(fields: [usuarioId], references: [id])
   usuarioId                Int?
-
-  // Cambio: El equipo pertenece a un AREA
   area                     Area?     @relation(fields: [areaId], references: [id])
   areaId                   Int?
-
   tipo                     DeviceType @relation(fields: [tipoId], references: [id])
-  tipoId                   Int      
-  
-  marca                    String   
-  modelo                   String   
-  
+  tipoId                   Int
+  marca                    String
+  modelo                   String
   numero_serie             String    @unique
-  
   estado                   DeviceStatus @relation(fields: [estadoId], references: [id])
-  estadoId                 Int      
-  
+  estadoId                 Int
   sistema_operativo        OperatingSystem? @relation(fields: [sistemaOperativoId], references: [id])
   sistemaOperativoId       Int?
-  
   licencia_so              String?
   office_version           String?
   office_tipo_licencia     String?
   office_serial            String?
   office_key               String?
-
   garantia_inicio          DateTime?
   garantia_fin             DateTime?
   garantia_numero_producto String?
-  garantia_numero_reporte  String?   // <--- NUEVO: Número de reporte del proveedor
+  garantia_numero_reporte  String?
   garantia_notes           String?   @db.Text
-
   created_at               DateTime  @default(now())
   updated_at               DateTime  @updatedAt
-  
   fecha_baja               DateTime?
   fecha_proxima_revision   DateTime?
   motivo_baja              String?   @db.VarChar(191)
-  observaciones_baja       String?   @db.Text 
-
+  observaciones_baja       String?   @db.Text
   es_panda                 Boolean   @default(false)
+  deletedAt                DateTime? // 👈 Soft Delete
 
-  maintenances             Maintenance[]
+  maintenances Maintenance[]
 
   @@index([usuarioId])
   @@index([areaId])
@@ -133,19 +120,17 @@ model Device {
 
 model Maintenance {
   id                  Int       @id @default(autoincrement())
-  descripcion         String   
+  descripcion         String
   fecha_programada    DateTime?
   fecha_realizacion   DateTime?
   estado              String    @default("pendiente")
   tipo_mantenimiento  String    @default("Preventivo") @db.VarChar(191)
-  
   device              Device    @relation(fields: [deviceId], references: [id])
   deviceId            Int
-  
   diagnostico         String?   @db.Text
   acciones_realizadas String?   @db.Text
   observaciones       String?   @db.Text
-  
+  deletedAt           DateTime? // 👈 Soft Delete
 
   @@index([deviceId])
 }
@@ -156,13 +141,40 @@ enum Rol {
   EDITOR
 }
 
-model userSistema {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
+model UserSistema {
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
   password  String
-  email     String   @unique
+  email     String    @unique
   nombre    String?
-  rol       Rol      @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  rol       Rol       @default(USER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // 👈 Soft Delete
+  
+  auditLogs AuditLog[] // Relación inversa para saber qué hizo cada usuario
+}
+
+// 👇 NUEVO: MODELO DE AUDITORÍA
+model AuditLog {
+  id          Int          @id @default(autoincrement())
+  action      String       // Ej: "CREATE", "UPDATE", "DELETE", "LOGIN"
+  entity      String       // Ej: "Device", "User", "Maintenance"
+  entityId    Int          // ID del objeto afectado
+  
+  oldData     Json?        // Datos antes del cambio
+  newData     Json?        // Datos después del cambio
+  
+  userId      Int?         // Quién hizo el cambio
+  user        UserSistema? @relation(fields: [userId], references: [id])
+  
+  details     String?      // Notas adicionales
+  ipAddress   String?      
+  userAgent   String?      
+  
+  createdAt   DateTime     @default(now())
+
+  @@index([entity, entityId]) 
+  @@index([userId])           
+  @@index([createdAt])        
 }

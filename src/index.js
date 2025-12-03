@@ -3,10 +3,11 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import prisma from "./PrismaClient.js";
-import bcrypt from "bcryptjs";
 import cron from "node-cron"; 
 import { sendMaintenanceReminder } from "./utils/email.service.js"; 
 import { preloadMasterData } from "./utils/preloadData.js";
+// 👇 IMPORTANTE: Importamos las constantes
+import { MAINTENANCE_STATUS } from "./config/constants.js"; 
 
 // Importar rutas
 import departmentRoutes from "./routes/department.routes.js";
@@ -19,7 +20,7 @@ import devicesRoutes from "./routes/devices.routes.js";
 import maintenanceRoutes from "./routes/maintenance.routes.js";
 import disposalRoutes from "./routes/disposal.routes.js";
 import authRoutes from "./routes/auth.routes.js";
-import auditRoutes from "./routes/audit.routes.js"; // 👈 NUEVA RUTA IMPORTADA
+import auditRoutes from "./routes/audit.routes.js"; 
 
 import { errorHandler } from "./middlewares/errorHandler.js";
 
@@ -40,7 +41,7 @@ app.use("/api/devices", devicesRoutes);
 app.use("/api/maintenances", maintenanceRoutes);
 app.use("/api/disposals", disposalRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/audit", auditRoutes); // 👈 CONECTAR RUTA
+app.use("/api/audit", auditRoutes);
 
 app.use(errorHandler);
 
@@ -51,8 +52,8 @@ app.listen(PORT, async () => {
 
   try {
     await prisma.$connect();
-    console.log("Conectado a la BD");
 
+    // 👇 Carga de datos maestros (admin, catalogos, etc)
     await preloadMasterData();
 
   } catch (err) {
@@ -60,10 +61,9 @@ app.listen(PORT, async () => {
   }
 
   // --- TAREA PROGRAMADA (CRON) ---
-  console.log("Tarea programada de recordatorios configurada (9:00 AM).");
+
   //cron.schedule('* * * * *', async () => {
   cron.schedule('0 9 * * *', async () => {
-    console.log('Ejecutando tarea programada (9:00 AM)...');
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -76,8 +76,9 @@ app.listen(PORT, async () => {
 
       const maintenances = await prisma.maintenance.findMany({
         where: {
-          estado: 'pendiente',
-          deletedAt: null, // 👈 IMPORTANTE: Respetar Soft Delete en CRON también
+          // 👇 CORREGIDO: Usamos la constante en lugar del string mágico
+          estado: MAINTENANCE_STATUS.PENDING, 
+          deletedAt: null, 
           OR: [
             { fecha_programada: { gte: fiveDaysFromNow, lt: new Date(fiveDaysFromNow.getTime() + 24 * 60 * 60 * 1000) } },
             { fecha_programada: { gte: oneDayFromNow, lt: new Date(oneDayFromNow.getTime() + 24 * 60 * 60 * 1000) } }
@@ -104,7 +105,7 @@ app.listen(PORT, async () => {
           where: {
             areaId: device.areaId,
             es_jefe_de_area: true,
-            deletedAt: null // 👈 No notificar a jefes borrados
+            deletedAt: null 
           }
         });
 
